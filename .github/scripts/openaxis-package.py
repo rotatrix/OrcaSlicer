@@ -47,6 +47,7 @@ elif platform == 'linux-x64':
         raise SystemExit(f'Expected exactly one AppImage, found {images}')
     package = dist / (name + '.AppImage')
     shutil.copy2(images[0], package)
+    subprocess.run(['xvfb-run', '-a', str(package), '--appimage-extract-and-run', '--help'], check=True, timeout=120)
     build = Path('build')
 else:
     raise SystemExit('Unknown platform')

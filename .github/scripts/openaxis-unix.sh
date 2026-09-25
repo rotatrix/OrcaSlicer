@@ -5,6 +5,10 @@ platform=${1:?Platform required}
 stage=${2:?Stage required}
 export CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL:-2}
 export git_commit_hash=${GITHUB_SHA:-$(git rev-parse HEAD)}
+if [[ "$platform" == macos ]]; then
+  export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+  export PATH="$(brew --prefix)/opt/gettext/bin:$(brew --prefix)/opt/texinfo/bin:$PATH"
+fi
 if [[ "$stage" == deps ]]; then
   case "$platform" in
     linux) ./build_linux.sh -drlL ;;
@@ -17,7 +21,7 @@ elif [[ "$stage" == build ]]; then
       export ORCA_EXTRA_BUILD_ARGS='-DSLIC3R_OPENAXIS=ON -DOPENAXIS_SOURCE_DIR='
       ./build_linux.sh -srlL
       ./scripts/check_appimage_libs.sh ./build/package ./build/package/bin/orca-slicer
-      xvfb-run -a ./build/package/bin/orca-slicer --help
+      xvfb-run -a ./build/package/orca-slicer --help
       ;;
     macos)
       export SLIC3R_OPENAXIS=ON

@@ -105,6 +105,7 @@ jobs:
             build/arm64/CMakeCache.txt
             build/**/CMakeConfigureLog.yaml
             deps/build/**/CMakeConfigureLog.yaml
+            deps/build/**/config.log
             build/openaxis-checks/Testing/Temporary/LastTest.log
           retention-days: 14
   draft-prerelease:
