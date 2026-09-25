@@ -1,7 +1,7 @@
 name: OpenAxis desktop builds
 on:
   push:
-    branches: ['rotatrix/2.4.2']
+    branches: ['rotatrix/stable']
   workflow_dispatch:
     inputs:
       platform:
@@ -92,6 +92,7 @@ jobs:
           name: OrcaSlicer-Rotatrix-${{ matrix.platform }}-${{ github.sha }}
           path: dist/*
           if-no-files-found: error
+          overwrite: true
           retention-days: 14
           compression-level: 0
       - name: Upload diagnostic logs
@@ -107,11 +108,12 @@ jobs:
             deps/build/**/CMakeConfigureLog.yaml
             deps/build/**/config.log
             build/openaxis-checks/Testing/Temporary/LastTest.log
+          overwrite: true
           retention-days: 14
   draft-prerelease:
     name: Draft prerelease
     needs: desktop
-    if: github.ref == 'refs/heads/rotatrix/2.4.2' && (github.event_name == 'push' || inputs.platform == 'all')
+    if: github.ref == 'refs/heads/rotatrix/stable' && (github.event_name == 'push' || inputs.platform == 'all')
     runs-on: ubuntu-24.04
     permissions:
       contents: write

@@ -40,12 +40,15 @@ Open and close the diagnostics panel and confirm viewport evidence follows it.
 ## Preview builds
 
 `.github/workflows/openaxis-build.yml` builds Windows x64, macOS ARM64, and
-Linux x64 packages on pushes to `rotatrix/2.4.2`. Manual runs can select a single
-platform for debugging. Installed dependencies are cached separately per
+Linux x64 packages on pushes to `rotatrix/stable`. Version branches such as
+`rotatrix/2.4.2` are built manually with `workflow_dispatch`, which can select a
+single platform for debugging. Advance `rotatrix/stable` to a tested version
+commit to start the release build; pushing version branches does not duplicate it. Installed dependencies are cached separately per
 platform and dependency-source hash.
 
 After all three builds, overlay checks, and package smoke checks pass, the
-workflow creates a draft prerelease. The release gate checks each package's
+workflow creates a draft prerelease only for `rotatrix/stable`. Manual version
+branch builds produce test artifacts without creating a release. The release gate checks each package's
 checksum, full source commit, SDK revision, and workflow run ID; it refuses to
 modify a published release. GUI and device testing are still required before
 publishing. Windows packages are unsigned; macOS bundles are ad-hoc signed.
