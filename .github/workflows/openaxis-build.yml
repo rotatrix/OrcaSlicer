@@ -1,0 +1,135 @@
+name: OpenAxis desktop builds
+on:
+  push:
+    branches: ['rotatrix/2.4.2']
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        type: choice
+        default: all
+        options: [all, windows, macos, linux]
+permissions:
+  contents: read
+concurrency:
+  group: openaxis-${{ github.ref }}-${{ inputs.platform || 'all' }}
+  cancel-in-progress: true
+env:
+  CMAKE_BUILD_PARALLEL_LEVEL: '2'
+  ORCA_UPDATER_SIG_KEY: ''
+jobs:
+  desktop:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON('{"all":[{"platform":"windows-x64","runner":"windows-2022","script":"windows","prefix":"deps/build/OrcaSlicer_dep"},{"platform":"macos-arm64","runner":"macos-15","script":"macos","prefix":"deps/build/arm64/OrcaSlicer_dep"},{"platform":"linux-x64","runner":"ubuntu-24.04","script":"linux","prefix":"deps/build/OrcaSlicer_dep"}],"windows":[{"platform":"windows-x64","runner":"windows-2022","script":"windows","prefix":"deps/build/OrcaSlicer_dep"}],"macos":[{"platform":"macos-arm64","runner":"macos-15","script":"macos","prefix":"deps/build/arm64/OrcaSlicer_dep"}],"linux":[{"platform":"linux-x64","runner":"ubuntu-24.04","script":"linux","prefix":"deps/build/OrcaSlicer_dep"}]}')[inputs.platform || 'all'] }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install CMake and Ninja
+        run: python -m pip install cmake==3.31.6 ninja
+      - name: Prepare logs
+        run: mkdir -p ci-logs dist
+      - name: Windows compiler environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Windows prerequisites
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install strawberryperl --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          'C:\Strawberry\perl\bin' | Out-File -FilePath $env:GITHUB_PATH -Append
+      - name: Linux prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          sudo ./build_linux.sh -ur
+          sudo apt-get install -y xvfb
+      - name: macOS prerequisites
+        if: runner.os == 'macOS'
+        run: brew install automake texinfo libtool gettext
+      - name: Restore dependencies
+        id: deps
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ matrix.prefix }}
+          key: orca-242-v1-${{ matrix.platform }}-${{ hashFiles('deps/**') }}
+      - name: Build dependencies (Unix)
+        if: runner.os != 'Windows' && steps.deps.outputs.cache-hit != 'true'
+        run: bash .github/scripts/openaxis-unix.sh '${{ matrix.script }}' deps 2>&1 | tee ci-logs/deps.log
+      - name: Build dependencies (Windows)
+        if: runner.os == 'Windows' && steps.deps.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: .github/scripts/openaxis-windows.ps1 deps *>&1 | Tee-Object ci-logs/deps.log
+      - name: Save dependencies
+        if: steps.deps.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ matrix.prefix }}
+          key: ${{ steps.deps.outputs.cache-primary-key }}
+      - name: Build and package (Unix)
+        if: runner.os != 'Windows'
+        run: bash .github/scripts/openaxis-unix.sh '${{ matrix.script }}' build 2>&1 | tee ci-logs/build.log
+      - name: Build and package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .github/scripts/openaxis-windows.ps1 build *>&1 | Tee-Object ci-logs/build.log
+      - name: Package provenance and checksums
+        run: python .github/scripts/openaxis-package.py '${{ matrix.platform }}'
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: OrcaSlicer-Rotatrix-${{ matrix.platform }}-${{ github.sha }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ matrix.platform }}-${{ github.sha }}
+          path: |
+            ci-logs/
+            build/CMakeCache.txt
+            build/arm64/CMakeCache.txt
+            build/**/CMakeConfigureLog.yaml
+            deps/build/**/CMakeConfigureLog.yaml
+            build/openaxis-checks/Testing/Temporary/LastTest.log
+          retention-days: 14
+  draft-prerelease:
+    name: Draft prerelease
+    needs: desktop
+    if: github.ref == 'refs/heads/rotatrix/2.4.2' && (github.event_name == 'push' || inputs.platform == 'all')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: OrcaSlicer-Rotatrix-windows-x64-${{ github.sha }}
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: OrcaSlicer-Rotatrix-macos-arm64-${{ github.sha }}
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          name: OrcaSlicer-Rotatrix-linux-x64-${{ github.sha }}
+          path: release-assets
+      - name: Validate packages and create draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python .github/scripts/openaxis-release.py release-assets

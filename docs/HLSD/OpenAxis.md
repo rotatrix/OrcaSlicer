@@ -36,3 +36,16 @@ ctest --test-dir build_openaxis_checks -C Release --output-on-failure
 In a GUI build, verify rotation, pan, zoom, native mouse input after navigation,
 plate switching, selection-only picking, and focus loss in Prepare and Preview.
 Open and close the diagnostics panel and confirm viewport evidence follows it.
+
+## Preview builds
+
+`.github/workflows/openaxis-build.yml` builds Windows x64, macOS ARM64, and
+Linux x64 packages on pushes to `rotatrix/2.4.2`. Manual runs can select a single
+platform for debugging. Installed dependencies are cached separately per
+platform and dependency-source hash.
+
+After all three builds, overlay checks, and package smoke checks pass, the
+workflow creates a draft prerelease. The release gate checks each package's
+checksum, full source commit, SDK revision, and workflow run ID; it refuses to
+modify a published release. GUI and device testing are still required before
+publishing. Windows packages are unsigned; macOS bundles are ad-hoc signed.
