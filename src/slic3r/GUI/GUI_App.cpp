@@ -384,7 +384,7 @@ private:
     wxColour m_fg_color;
     wxColour m_bg_color;
 
-    wxString m_text_version = GUI_App::format_display_version();
+    wxString m_text_version = "Rotatrix Build (unofficial)\n" + GUI_App::format_display_version();
     wxString m_text_action  = _L("Loading configuration") + dots;
 
     wxFont m_font_version = Label::Body_16;

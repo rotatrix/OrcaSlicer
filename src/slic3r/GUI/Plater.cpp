@@ -10813,12 +10813,12 @@ void Plater::priv::set_project_name(const wxString& project_name)
     m_project_name = project_name;
     //update topbar title
 #ifdef __APPLE__
-    wxGetApp().mainframe->SetTitle(m_project_name);
+    wxGetApp().mainframe->SetTitle(m_project_name + " - " + SLIC3R_APP_DISPLAY_NAME);
     if (!m_project_name.IsEmpty())
         wxGetApp().mainframe->update_title_colour_after_set_title();
 #else
-    wxGetApp().mainframe->SetTitle(m_project_name + " - OrcaSlicer");
-    wxGetApp().mainframe->topbar()->SetTitle(m_project_name);
+    wxGetApp().mainframe->SetTitle(m_project_name + " - " + SLIC3R_APP_DISPLAY_NAME);
+    wxGetApp().mainframe->topbar()->SetTitle(m_project_name + " - " + SLIC3R_APP_DISPLAY_NAME);
 #endif
 }
 
@@ -10834,11 +10834,11 @@ void Plater::priv::update_title_dirty_status()
         title = m_project_name;
 
 #ifdef __APPLE__
-    wxGetApp().mainframe->SetTitle(title);
+    wxGetApp().mainframe->SetTitle(title + " - " + SLIC3R_APP_DISPLAY_NAME);
     wxGetApp().mainframe->update_title_colour_after_set_title();
 #else
-    wxGetApp().mainframe->SetTitle(title + " - OrcaSlicer");
-    wxGetApp().mainframe->topbar()->SetTitle(title);
+    wxGetApp().mainframe->SetTitle(title + " - " + SLIC3R_APP_DISPLAY_NAME);
+    wxGetApp().mainframe->topbar()->SetTitle(title + " - " + SLIC3R_APP_DISPLAY_NAME);
 #endif    
 }
 

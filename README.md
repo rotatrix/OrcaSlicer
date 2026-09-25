@@ -1,3 +1,9 @@
+# OrcaSlicer 2.4.2 — Rotatrix Build (unofficial)
+
+This is an unofficial OrcaSlicer build with OpenAxis navigation for Rotatrix.
+It is not an official release or endorsed by the OrcaSlicer project.
+See [OpenAxis integration](docs/HLSD/OpenAxis.md) for build instructions.
+
 <div align="center">
 
 <picture>
