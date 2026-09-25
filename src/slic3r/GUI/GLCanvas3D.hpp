@@ -16,6 +16,10 @@
 #include "libslic3r/GCode/GCodeProcessor.hpp"
 #include "GCodeViewer.hpp"
 #include "Camera.hpp"
+#ifdef SLIC3R_OPENAXIS
+#include "OpenAxisController.hpp"
+#include "OpenAxisScheduler.hpp"
+#endif
 #include "SceneRaycaster.hpp"
 #include "IMToolbar.hpp"
 #include "slic3r/GUI/3DBed.hpp"
@@ -518,6 +522,13 @@ public:
 private:
     bool m_is_dark = false;
     wxGLCanvas* m_canvas;
+#ifdef SLIC3R_OPENAXIS
+    std::shared_ptr<OpenAxisScheduler> m_openaxis_scheduler;
+    std::unique_ptr<OpenAxisController> m_openaxis;
+    bool m_openaxis_diagnostics = false;
+    std::uint64_t m_openaxis_scene_revision = 0;
+    void refresh_openaxis();
+#endif
     wxGLContext* m_context;
     SceneRaycaster m_scene_raycaster;
     Bed3D &m_bed;
@@ -737,6 +748,11 @@ public:
     ~GLCanvas3D();
 
     bool is_initialized() const { return m_initialized; }
+#ifdef SLIC3R_OPENAXIS
+    void toggle_openaxis_diagnostics() { m_openaxis_diagnostics = !m_openaxis_diagnostics; set_as_dirty(); }
+    std::uint64_t openaxis_scene_revision() const { return m_openaxis_scene_revision; }
+    void update_openaxis_projection();
+#endif
 
     void set_context(wxGLContext* context) { m_context = context; }
     void set_type(ECanvasType type) { m_canvas_type = type; }

@@ -2602,6 +2602,12 @@ static wxMenu* generate_help_menu()
             return true;
         });
 
+#ifdef SLIC3R_OPENAXIS
+    append_menu_item(helpMenu, wxID_ANY, "OpenAxis Diagnostics", "Show OpenAxis navigation diagnostics",
+        [](wxCommandEvent&) {
+            if (auto *canvas = wxGetApp().plater()->get_current_canvas3D()) canvas->toggle_openaxis_diagnostics();
+        });
+#endif
     // About
 #ifndef __APPLE__
     wxString about_title = wxString::Format(_L("&About %s"), SLIC3R_APP_FULL_NAME);

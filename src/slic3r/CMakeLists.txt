@@ -746,6 +746,13 @@ if (WIN32)
 else ()
     add_library(libslic3r_gui STATIC ${SLIC3R_GUI_SOURCES})
 endif ()
+include(${CMAKE_SOURCE_DIR}/cmake/OpenAxis.cmake)
+if(SLIC3R_OPENAXIS)
+    target_sources(libslic3r_gui PRIVATE GUI/OpenAxisController.cpp)
+    target_link_libraries(libslic3r_gui OpenAxis::openaxis)
+    target_compile_definitions(libslic3r_gui PUBLIC SLIC3R_OPENAXIS)
+endif()
+
 target_include_directories(libslic3r_gui PRIVATE Utils ${CMAKE_CURRENT_BINARY_DIR})
 
 if (WIN32)
