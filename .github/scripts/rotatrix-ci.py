@@ -53,7 +53,7 @@ def verify(platform, arch):
 
 
 def record(platform, arch):
-    commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+    commit = subprocess.check_output(['git', '-c', f'safe.directory={Path.cwd().as_posix()}', 'rev-parse', 'HEAD'], text=True).strip()
     if commit != os.environ['GITHUB_SHA']:
         raise ValueError('Checkout differs from workflow source SHA')
     sdk = os.environ['OPENAXIS_COMMIT']
