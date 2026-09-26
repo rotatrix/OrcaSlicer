@@ -520,7 +520,12 @@ jobs:
         run: |
           test_repo_dir="${{ runner.temp }}/orca-test-repo"
           rm -rf "$test_repo_dir"
-          git clone --depth 1 https://github.com/OrcaSlicer/orca-test-repo.git "$test_repo_dir"
+          # Freeze the suite at the last revision before upstream v2.4.2.
+          # Current test-repo HEAD exercises 2.5-dev CLI flags and behavior.
+          git init "$test_repo_dir"
+          git -C "$test_repo_dir" remote add origin https://github.com/OrcaSlicer/orca-test-repo.git
+          git -C "$test_repo_dir" fetch --depth 1 origin 0dfd8df467895d7093d50b267c7209fd53f43a40
+          git -C "$test_repo_dir" checkout --detach FETCH_HEAD
           python3 "$test_repo_dir/run_test.py" "${{ github.workspace }}/build/package/bin/orca-slicer"
 
       - name: Build orca_custom_preset_tests

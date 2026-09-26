@@ -54,9 +54,12 @@ branch exists. Set it to `rotatrix/v2.4.2` on promotion. There is no rolling
 
 `build_all.yml` is the active pipeline, reusing upstream's `build_check_cache.yml`
 -> `build_deps.yml` -> `build_orca.yml` chain. It runs on Rotatrix branch pushes,
-PRs against maintained branches, and manual dispatch. The upstream matrix builds
+PRs against maintained branches, and manual dispatch. Manual runs can select a
+platform family for isolated retries. The upstream matrix builds
 Windows x64/ARM64, Linux x64/ARM64, macOS arm64/x86_64 plus a universal DMG, and
-Flatpak x64/ARM64. Upstream Linux unit/regression tests are retained. OpenAxis
+Flatpak x64/ARM64. Upstream Linux unit/regression tests are retained. The external
+regression suite is pinned to its last revision before the upstream release;
+update that pin when porting to another upstream version. OpenAxis
 checks and native startup checks run before distribution artifacts are uploaded.
 
 OpenAxis is opt-in for local builds. CI uses the SDK release specified in
