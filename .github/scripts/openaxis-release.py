@@ -1,4 +1,4 @@
-"""Create a draft only from verified artifacts produced by this workflow run."""
+"""Create a tagged release draft from verified artifacts in this workflow run."""
 import hashlib
 import json
 import os
@@ -41,17 +41,30 @@ def validate_assets(directory, commit, run_id):
 def main():
     commit, run_id, repo = (os.environ[k] for k in ['GITHUB_SHA', 'GITHUB_RUN_ID', 'GH_REPO'])
     assets = validate_assets(Path(sys.argv[1]), commit, run_id)
-    tag = f'openaxis-preview-{commit}'
+    if os.environ.get('GITHUB_REF_TYPE') != 'tag':
+        raise ValueError('Releases require an explicit release tag')
+    tag = os.environ['GITHUB_REF_NAME']
+    match = re.fullmatch(r'(v?\d+\.\d+\.\d+)-rotatrix\.([1-9]\d*)(?:-(beta|rc)\.([1-9]\d*))?', tag)
+    if not match:
+        raise ValueError('Expected <upstream-tag>-rotatrix.N[-beta.N|-rc.N]')
+    upstream = match[1]
+    version = re.search(r'set\(SoftFever_VERSION "([^"]+)"\)', Path('version.inc').read_text())[1]
+    if upstream.removeprefix('v') != version:
+        raise ValueError('Release tag does not match the source version')
+    tagged_commit = subprocess.check_output(['git', 'rev-parse', f'refs/tags/{tag}^{{commit}}'], text=True).strip()
+    if tagged_commit != commit:
+        raise ValueError('Release tag does not point to the built commit')
+    prerelease = match[3] is not None
     # Include drafts and fail closed on API/auth errors.
     pages = json.loads(subprocess.check_output(
         ['gh', 'api', '--paginate', '--slurp', f'repos/{repo}/releases'], text=True))
     matches = [release for page in pages for release in page if release['tag_name'] == tag]
     if matches:
-        if len(matches) != 1 or not matches[0]['draft'] or not matches[0]['prerelease'] or matches[0]['target_commitish'] != commit:
-            raise ValueError('Existing release is not the matching draft prerelease')
+        if len(matches) != 1 or not matches[0]['draft'] or matches[0]['prerelease'] != prerelease or matches[0]['target_commitish'] != commit:
+            raise ValueError('Existing release is not the matching release draft')
         subprocess.run(['gh', 'release', 'upload', tag, *assets, '--clobber'], check=True)
         return
-    notes = f'''OrcaSlicer 2.4.2 — Rotatrix Build (unofficial)
+    notes = f'''OrcaSlicer {tag} - Rotatrix Build (unofficial)
 
 Built from commit {commit}. All three platforms passed compilation, viewport
 checks and package smoke checks in the same Actions run:
@@ -68,8 +81,9 @@ remain required before publication. This is not an official OrcaSlicer release.
     with tempfile.TemporaryDirectory() as temp:
         path = Path(temp) / 'notes.md'
         path.write_text(notes, encoding='utf-8')
-        subprocess.run(['gh', 'release', 'create', tag, *assets, '--draft', '--prerelease',
-                        '--target', commit, '--title', f'OrcaSlicer 2.4.2 OpenAxis preview {commit[:12]}',
+        subprocess.run(['gh', 'release', 'create', tag, *assets, '--verify-tag', '--draft',
+                        *(['--prerelease'] if prerelease else []),
+                        '--target', commit, '--title', f'OrcaSlicer {tag} - Rotatrix Build (unofficial)',
                         '--notes-file', str(path)], check=True)
 
 
