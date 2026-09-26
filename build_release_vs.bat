@@ -1,6 +1,7 @@
 @REM OrcaSlicer build script for Windows with VS auto-detect
 @echo off
 set WP=%CD%
+if not defined CMAKE_BUILD_PARALLEL_LEVEL set CMAKE_BUILD_PARALLEL_LEVEL=%NUMBER_OF_PROCESSORS%
 set _START_TIME=%TIME%
 
 @REM Default target architecture to the host CPU arch; override by passing
@@ -114,6 +115,7 @@ setlocal DISABLEDELAYEDEXPANSION
 cd deps
 mkdir %build_dir%
 cd %build_dir%
+if not defined SLIC3R_OPENAXIS set SLIC3R_OPENAXIS=OFF
 set "SIG_FLAG="
 if defined ORCA_UPDATER_SIG_KEY set "SIG_FLAG=-DORCA_UPDATER_SIG_KEY=%ORCA_UPDATER_SIG_KEY%"
 
@@ -127,10 +129,14 @@ REM Set minimum CMake policy to avoid <3.5 errors
 set CMAKE_POLICY_VERSION_MINIMUM=3.5
 if "%USE_NINJA%"=="1" (
     cmake ../ -G %CMAKE_GENERATOR% -DCMAKE_BUILD_TYPE=%build_type%
+    if errorlevel 1 exit /b 1
     cmake --build . --config %build_type% --target deps
+    if errorlevel 1 exit /b 1
 ) else (
     cmake ../ -G %CMAKE_GENERATOR% -A %arch% -DCMAKE_BUILD_TYPE=%build_type%
-    cmake --build . --config %build_type% --target deps -- -m
+    if errorlevel 1 exit /b 1
+    cmake --build . --config %build_type% --target deps --parallel 1
+    if errorlevel 1 exit /b 1
 )
 @echo off
 
@@ -145,17 +151,22 @@ cd %build_dir%
 echo on
 set CMAKE_POLICY_VERSION_MINIMUM=3.5
 if "%USE_NINJA%"=="1" (
-    cmake .. -G %CMAKE_GENERATOR% -DORCA_TOOLS=ON %SIG_FLAG% -DCMAKE_BUILD_TYPE=%build_type%
+    cmake .. -G %CMAKE_GENERATOR% -DORCA_TOOLS=ON -DSLIC3R_OPENAXIS=%SLIC3R_OPENAXIS% "-DOPENAXIS_SOURCE_DIR=%OPENAXIS_SOURCE_DIR%" %SIG_FLAG% -DCMAKE_BUILD_TYPE=%build_type%
+    if errorlevel 1 exit /b 1
     cmake --build . --config %build_type% --target ALL_BUILD
+    if errorlevel 1 exit /b 1
 ) else (
-    cmake .. -G %CMAKE_GENERATOR% -A %arch% -DORCA_TOOLS=ON %SIG_FLAG% -DCMAKE_BUILD_TYPE=%build_type%
-    cmake --build . --config %build_type% --target ALL_BUILD -- -m
+    cmake .. -G %CMAKE_GENERATOR% -A %arch% -DORCA_TOOLS=ON -DSLIC3R_OPENAXIS=%SLIC3R_OPENAXIS% "-DOPENAXIS_SOURCE_DIR=%OPENAXIS_SOURCE_DIR%" %SIG_FLAG% -DCMAKE_BUILD_TYPE=%build_type%
+    if errorlevel 1 exit /b 1
+    cmake --build . --config %build_type% --target ALL_BUILD --parallel %CMAKE_BUILD_PARALLEL_LEVEL%
+    if errorlevel 1 exit /b 1
 )
 @echo off
 cd ..
 call scripts/run_gettext.bat
 cd %build_dir%
 cmake --build . --target install --config %build_type%
+    if errorlevel 1 exit /b 1
 
 :done
 @echo off

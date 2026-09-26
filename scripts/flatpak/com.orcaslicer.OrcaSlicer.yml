@@ -147,6 +147,8 @@ modules:
       - |
         cmake -S deps -B $BUILD_DIR \
           -DFLATPAK=ON \
+          -DSLIC3R_OPENAXIS=ON \
+          -DOPENAXIS_SOURCE_DIR="$(pwd)/openaxis-sdk" \
           -DDEP_DOWNLOAD_DIR=/run/build/orca_deps/external-packages \
           -DCMAKE_PREFIX_PATH=/app \
           -DDESTDIR=/app \
@@ -329,6 +331,8 @@ modules:
       - |
         cmake . -B build_flatpak \
           -DFLATPAK=ON \
+          -DSLIC3R_OPENAXIS=ON \
+          -DOPENAXIS_SOURCE_DIR="$(pwd)/openaxis-sdk" \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_PREFIX_PATH=/app \
           -DCMAKE_INSTALL_PREFIX=/app \
@@ -359,6 +363,10 @@ modules:
         fc-cache -f /app/share/fonts/OrcaSlicer/
 
     sources:
+      - type: git
+        url: https://github.com/rotatrix/openaxis.git
+        commit: acc4da095cde6747556245b4b6c110c16b968b6b
+        dest: openaxis-sdk
       # OrcaSlicer source tree (specific dirs to avoid copying .git from worktree)
       - type: dir
         path: ../../cmake

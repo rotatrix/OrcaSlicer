@@ -1,10 +1,5 @@
-name: OpenAxis desktop builds
+name: OpenAxis legacy fallback
 on:
-  push:
-    branches: ['rotatrix/**']
-    tags: ['*-rotatrix.*']
-  pull_request:
-    branches: ['rotatrix/*']
   workflow_dispatch:
     inputs:
       platform:

@@ -199,6 +199,7 @@ function build_slicer() {
                     -G "${SLICER_CMAKE_GENERATOR}" \
                     -DORCA_TOOLS=ON \
                     -DSLIC3R_OPENAXIS="${SLIC3R_OPENAXIS:-OFF}" \
+                    -DOPENAXIS_SOURCE_DIR="${OPENAXIS_SOURCE_DIR:-}" \
                     ${ORCA_UPDATER_SIG_KEY:+-DORCA_UPDATER_SIG_KEY="$ORCA_UPDATER_SIG_KEY"} \
                     ${BUILD_TESTS:+-DBUILD_TESTS=ON} \
                     -DCMAKE_BUILD_TYPE="$BUILD_CONFIG" \

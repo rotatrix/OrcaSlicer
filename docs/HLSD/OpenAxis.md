@@ -50,28 +50,33 @@ The default branch is temporarily the work branch while no maintained Rotatrix
 branch exists. Set it to `rotatrix/v2.4.2` on promotion. There is no rolling
 `rotatrix/stable` branch. Mirror upstream tag spelling, including the `v`.
 
-`.github/workflows/openaxis-build.yml` runs on pushes to `rotatrix/**`, PRs
-against `rotatrix/*`, and manual dispatch (including a single-platform option).
-It builds Windows x64, macOS ARM64, and Linux x64, using upstream dependency,
-build and AppImage scripts. Existing upstream workflows are retained, including
-the broader architecture matrix and installer/signing/notarization machinery;
-the current OpenAxis test pipeline uses the three validated native targets.
-Installed dependencies are cached per platform and dependency-source hash.
-Artifacts include the full source SHA and expire after 14 days. Ordinary work,
-maintained-branch and PR builds never create a release or tag.
+## Upstream CI migration
 
-Release builds run only when an explicit `<upstream-tag>-rotatrix.N` tag is
-pushed, for example `v2.4.2-rotatrix.1`. Reset N for each upstream version.
-Tags are immutable: never move or delete a shipped release tag. Permanent test
-releases use `v2.4.2-rotatrix.1-beta.1` (or `-rc.1`) and are prereleases.
-All three platform jobs must succeed in the same run. The release gate checks
-checksums, source SHA, SDK revision, run ID and tag target before creating a
-draft; it refuses to overwrite a published release. Final tags create regular
-drafts, beta/rc tags create prerelease drafts. No release tag is created by CI.
+`build_all.yml` is the active pipeline, reusing upstream's `build_check_cache.yml`
+-> `build_deps.yml` -> `build_orca.yml` chain. It runs on Rotatrix branch pushes,
+PRs against maintained branches, and manual dispatch. The upstream matrix builds
+Windows x64/ARM64, Linux x64/ARM64, macOS arm64/x86_64 plus a universal DMG, and
+Flatpak x64/ARM64. Upstream Linux unit/regression tests are retained. OpenAxis
+checks and native startup checks run before distribution artifacts are uploaded.
 
-The current work-stage packages are a Windows portable ZIP, a macOS app ZIP and
-a Linux AppImage. Windows is unsigned and macOS is ad-hoc signed, not notarized.
-Before shipping a maintained release, adapt the retained upstream installer and
-signing/notarization workflow with Rotatrix credentials; upstream signing secrets
-are not available to this fork. GUI and device testing remain required. Drafts
-must not be treated as production-ready signed distributions.
+OpenAxis is opt-in for local builds. CI uses the SDK release specified in
+`cmake/OpenAxis.cmake`, includes its licenses, and enables it through upstream
+build scripts. Flatpak uses the same pinned SDK as an offline manifest source;
+update its commit when updating the SDK tag. Windows Store identity and upstream
+nightly publication remain restricted to the upstream repository. Test macOS
+bundles are ad-hoc signed; production signing needs Rotatrix credentials.
+
+Artifacts include the source SHA, checksums and source/SDK/run manifests, and
+expire after 14 days. Routine branch/PR builds do not create releases or tags.
+An explicit immutable `<upstream-tag>-rotatrix.N` tag triggers a full build and
+calls the adapted upstream `publish_release.yml`. Every distribution and test
+job must pass; the release script verifies all nine distributions are from the
+same source, SDK and run before creating a draft. Final tags create regular
+drafts; `-beta.N`/`-rc.N` tags create prerelease drafts. Published releases are
+never overwritten. No release tags are created automatically. Reset N when the
+upstream version changes. GUI and hardware testing remain required.
+
+During migration, `openaxis-build.yml` remains a manual-only fallback. Retire
+that workflow and its standalone packaging scripts only after the upstream
+pipeline passes with downloadable packages. No maintained branch or release
+is created as part of this migration.

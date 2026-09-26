@@ -12,27 +12,40 @@ import tempfile
 def validate_assets(directory, commit, run_id):
     if not re.fullmatch(r'[0-9a-f]{40}', commit):
         raise ValueError('Invalid source commit')
-    assets = []
-    sdk_commits = set()
-    for platform, extension in [('windows-x64', 'zip'), ('macos-arm64', 'zip'), ('linux-x64', 'AppImage')]:
-        package = directory / f'OrcaSlicer-Rotatrix-{platform}-{commit[:12]}.{extension}'
-        checksum = package.with_name(package.name + '.sha256')
-        manifest = package.with_name(package.name + '.json')
-        if not package.is_file() or package.stat().st_size == 0:
-            raise ValueError(f'Missing package: {package}')
+    expected = {
+        ('windows-x64', '.zip'), ('windows-x64', '.exe'),
+        ('windows-arm64', '.zip'), ('windows-arm64', '.exe'),
+        ('macos-universal', '.dmg'),
+        ('linux-x64', '.AppImage'), ('linux-aarch64', '.AppImage'),
+        ('flatpak-x86_64', '.flatpak'), ('flatpak-aarch64', '.flatpak'),
+    }
+    assets, found, sdk_commits = [], set(), set()
+    for manifest in directory.glob('*.json'):
+        data = json.loads(manifest.read_text())
+        filename = data['file']
+        if Path(filename).name != filename or '/' in filename or '\\' in filename:
+            raise ValueError('Invalid package filename')
+        package = directory / filename
+        kind = (data['platform'], package.suffix)
+        if kind not in expected or kind in found:
+            raise ValueError(f'Unexpected or duplicate package: {kind}')
+        found.add(kind)
+        if not package.is_file() or not package.stat().st_size:
+            raise ValueError(f'Missing package: {filename}')
         with package.open('rb') as stream:
             digest = hashlib.file_digest(stream, 'sha256').hexdigest()
+        checksum = package.with_name(package.name + '.sha256')
         if checksum.read_text().split() != [digest, package.name]:
-            raise ValueError(f'Checksum mismatch: {package}')
-        data = json.loads(manifest.read_text())
-        expected = dict(commit=commit, run_id=run_id, platform=platform, file=package.name, sha256=digest)
-        if any(data.get(k) != v for k, v in expected.items()):
-            raise ValueError(f'Provenance mismatch: {package}')
+            raise ValueError(f'Checksum mismatch: {filename}')
+        if data.get('commit') != commit or data.get('run_id') != run_id or data.get('sha256') != digest:
+            raise ValueError(f'Provenance mismatch: {filename}')
         sdk = data.get('openaxis_commit', '')
         if not re.fullmatch(r'[0-9a-f]{40}', sdk):
             raise ValueError('Invalid SDK revision')
         sdk_commits.add(sdk)
         assets.extend([str(package), str(checksum), str(manifest)])
+    if found != expected:
+        raise ValueError(f'Missing platform packages: {expected - found}')
     if len(sdk_commits) != 1:
         raise ValueError('Platforms used different SDK revisions')
     return assets
@@ -70,8 +83,8 @@ Built from commit {commit}. All three platforms passed compilation, viewport
 checks and package smoke checks in the same Actions run:
 https://github.com/{repo}/actions/runs/{run_id}
 
-Packages: Windows x64 portable ZIP, macOS ARM64 app ZIP, and Linux x64 AppImage
-for Ubuntu 24.04 and compatible distributions. Checksums and source manifests
+Packages: Windows x64/ARM64 installers and portable ZIPs, macOS universal DMG,
+Linux x64/ARM64 AppImages, and x64/ARM64 Flatpaks. Checksums and source manifests
 accompany each package.
 
 Windows is unsigned and requires the Microsoft Visual C++ x64 Redistributable.

@@ -30,6 +30,7 @@ jobs:
     runs-on: ${{ inputs.os }}
     env:
       date:
+      CMAKE_BUILD_PARALLEL_LEVEL: 2
     steps:
 
       # Setup the environment
@@ -132,7 +133,9 @@ jobs:
         working-directory: ${{ github.workspace }}
         run: |
             if (-not "${{ vars.SELF_HOSTED }}") {
-              choco install strawberryperl
+              choco install strawberryperl --yes --no-progress
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              $env:PATH = "C:\Strawberry\perl\bin;$env:PATH"
             }
             $arch = "${{ inputs.arch }}"
             if ($arch -eq "arm64") {
@@ -151,6 +154,8 @@ jobs:
             if [ -z "${{ vars.SELF_HOSTED }}" ]; then
               brew install automake texinfo libtool
             fi
+            export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+            export PATH="$(brew --prefix)/opt/texinfo/bin:$PATH"
             ./build_release_macos.sh -dx ${{ !vars.SELF_HOSTED && '-1' || '' }} -a ${{ inputs.arch }} -t 10.15
             (cd "${{ github.workspace }}/deps/build/${{ inputs.arch }}" && \
             find . -mindepth 1 -maxdepth 1 ! -name 'OrcaSlicer_dep' -exec rm -rf {} +)
@@ -164,10 +169,9 @@ jobs:
         if: runner.os == 'Linux'
         working-directory: ${{ github.workspace }}
         run: |
-            mkdir -p ${{ github.workspace }}/deps/build/destdir
             ./build_linux.sh -drlL
             cd deps/build
-            tar -czvf OrcaSlicer_dep_ubuntu_$(date +"%Y%m%d").tar.gz destdir
+            tar -czvf OrcaSlicer_dep_ubuntu_$(date +"%Y%m%d").tar.gz OrcaSlicer_dep
 
 
       # Upload Artifacts
