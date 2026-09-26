@@ -50,7 +50,7 @@ The default branch is temporarily the work branch while no maintained Rotatrix
 branch exists. Set it to `rotatrix/v2.4.2` on promotion. There is no rolling
 `rotatrix/stable` branch. Mirror upstream tag spelling, including the `v`.
 
-## Upstream CI migration
+## Upstream CI
 
 The source and workflow baseline is official OrcaSlicer `v2.4.2`, commit
 `8500fcdccaa10b5099ac20d252af3a7c560046f1`; the workflows are adapted from that
@@ -99,7 +99,8 @@ drafts; `-beta.N`/`-rc.N` tags create prerelease drafts. Published releases are
 never overwritten. No release tags are created automatically. Reset N when the
 upstream version changes. GUI and hardware testing remain required.
 
-During migration, `openaxis-build.yml` remains a manual-only fallback. Retire
-that workflow and its standalone packaging scripts only after the upstream
-pipeline passes with downloadable packages. No maintained branch or release
-is created as part of this migration.
+The former standalone OpenAxis workflow and packaging scripts were retired
+after all supported platform builds produced downloadable packages and the
+Linux regression/unit tests passed. The upstream pipeline is the sole build
+path. This remains a work branch; migration does not create a maintained branch
+or release.
