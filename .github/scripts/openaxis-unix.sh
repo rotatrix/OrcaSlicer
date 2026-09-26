@@ -6,8 +6,9 @@ stage=${2:?Stage required}
 export CMAKE_BUILD_PARALLEL_LEVEL=${CMAKE_BUILD_PARALLEL_LEVEL:-2}
 export git_commit_hash=${GITHUB_SHA:-$(git rev-parse HEAD)}
 if [[ "$platform" == macos ]]; then
-  export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
-  export PATH="$(brew --prefix)/opt/gettext/bin:$(brew --prefix)/opt/texinfo/bin:$PATH"
+  SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
+  PATH="$(brew --prefix)/opt/gettext/bin:$(brew --prefix)/opt/texinfo/bin:$PATH"
+  export SDKROOT PATH
 fi
 if [[ "$stage" == deps ]]; then
   case "$platform" in

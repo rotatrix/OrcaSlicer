@@ -68,6 +68,11 @@ jobs:
           if (-not (Test-Path "$cmakeBin\cmake.exe")) { throw "cmake.exe not found at $cmakeBin" }
           Add-Content -Path $env:GITHUB_PATH -Value $cmakeBin
 
+      - name: Windows compiler environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ inputs.arch }}
       - name: setup dev on Windows
         if: runner.os == 'Windows'
         uses: microsoft/setup-msbuild@v3

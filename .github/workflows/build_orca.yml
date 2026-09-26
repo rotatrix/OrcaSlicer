@@ -329,6 +329,11 @@ jobs:
             "ARCH_SUFFIX=_x64"       | Out-File -Append -FilePath $env:GITHUB_ENV -Encoding utf8
           }
 
+      - name: Windows compiler environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ inputs.arch }}
       - name: setup MSVC
         if: runner.os == 'Windows'
         uses: microsoft/setup-msbuild@v3
