@@ -604,12 +604,18 @@ jobs:
 
       - name: Upload build diagnostics
         if: failure()
+        timeout-minutes: 3
         uses: actions/upload-artifact@v7
         with:
           overwrite: true
           name: logs-${{ runner.os }}-${{ inputs.arch }}-${{ github.sha }}
           path: |
-            build*/**/CMakeCache.txt
-            build*/**/CMakeConfigureLog.yaml
-            build*/**/LastTest.log
+            build/CMakeCache.txt
+            build-arm64/CMakeCache.txt
+            build/arm64/CMakeCache.txt
+            build/x86_64/CMakeCache.txt
+            build/CMakeFiles/CMakeConfigureLog.yaml
+            build-arm64/CMakeFiles/CMakeConfigureLog.yaml
+            build/arm64/CMakeFiles/CMakeConfigureLog.yaml
+            build/x86_64/CMakeFiles/CMakeConfigureLog.yaml
           retention-days: 14

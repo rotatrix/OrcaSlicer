@@ -63,7 +63,7 @@ def record(platform, arch):
     elif platform == 'macos':
         patterns = ['OrcaSlicer_Mac_universal_*.dmg']
         app = 'build/universal/OrcaSlicer/OrcaSlicer.app'
-        run('lipo', '-verify_arch', 'arm64', 'x86_64', f'{app}/Contents/MacOS/OrcaSlicer')
+        run('lipo', f'{app}/Contents/MacOS/OrcaSlicer', '-verify_arch', 'arm64', 'x86_64')
         run('codesign', '--verify', '--deep', '--strict', app)
     elif platform == 'linux':
         patterns = ['build/OrcaSlicer_Linux_AppImage*.AppImage']
