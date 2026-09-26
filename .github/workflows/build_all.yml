@@ -13,7 +13,7 @@ on:
         description: Platform family (all for complete validation)
         type: choice
         default: all
-        options: [all, windows, linux, macos, flatpak]
+        options: [all, windows, windows-arm64, linux, macos, flatpak]
       build-deps-only:
         description: 'Only build dependencies (bypasses caching)'
         type: boolean
@@ -55,13 +55,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - arch: x64
-            os: windows-2022
-          - arch: arm64
-            os: windows-11-arm
+        include: ${{ fromJSON(inputs.platform == 'windows-arm64' && '[{"arch":"arm64","os":"windows-11-arm"}]' || '[{"arch":"x64","os":"windows-2022"},{"arch":"arm64","os":"windows-11-arm"}]') }}
     # Don't run scheduled builds on forks:
-    if: ${{ (inputs.platform == '' || inputs.platform == 'all' || inputs.platform == 'windows') && !cancelled() && (github.event_name != 'schedule' || github.repository == 'OrcaSlicer/OrcaSlicer') }}
+    if: ${{ (inputs.platform == '' || inputs.platform == 'all' || inputs.platform == 'windows' || inputs.platform == 'windows-arm64') && !cancelled() && (github.event_name != 'schedule' || github.repository == 'OrcaSlicer/OrcaSlicer') }}
     uses: ./.github/workflows/build_check_cache.yml
     with:
       # Self-hosted runner is x64-only; ARM64 always uses the GitHub-hosted runner.

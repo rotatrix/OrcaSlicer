@@ -52,6 +52,26 @@ branch exists. Set it to `rotatrix/v2.4.2` on promotion. There is no rolling
 
 ## Upstream CI migration
 
+The source and workflow baseline is official OrcaSlicer `v2.4.2`, commit
+`8500fcdccaa10b5099ac20d252af3a7c560046f1`; the workflows are adapted from that
+release, not copied from upstream main. Its dependency definitions, build
+options and architecture coverage are retained. Windows Store packaging remains
+upstream-only because its publisher identity is not Rotatrix's.
+
+Compatibility adjustments are separate from the OpenAxis and branding commits:
+Windows x64 uses `windows-2022` and an explicit MSVC environment; Perl is selected
+explicitly for dependency builds. Windows ARM64 predeclares the unavailable
+Fortran compiler for Eigen, avoiding a hung Visual Studio probe while retaining
+Eigen's normal no-Fortran path. macOS retains `macos-14`, exports the selected
+SDK and Homebrew tools, and keeps the active Xcode installation. Linux dependency
+archives use the build script's `OrcaSlicer_dep` directory. Flatpak uses the
+container's Python and a scoped Git ownership exception for provenance. Build
+parallelism is bounded on hosted runners. No additional upstream compatibility
+commits were cherry-picked. The release's placeholder-parser vector test needs
+explicit vector fixtures because its production settings are scalar; assertions
+and production behavior are unchanged. Reassess these adjustments and the
+external regression-suite pin when porting to a newer release.
+
 `build_all.yml` is the active pipeline, reusing upstream's `build_check_cache.yml`
 -> `build_deps.yml` -> `build_orca.yml` chain. It runs on Rotatrix branch pushes,
 PRs against maintained branches, and manual dispatch. Manual runs can select a
