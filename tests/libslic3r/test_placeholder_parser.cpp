@@ -245,10 +245,11 @@ SCENARIO("Placeholder parser coFloatsOrPercents vector access", "[PlaceholderPar
     PlaceholderParser parser;
     auto config = DynamicPrintConfig::full_print_config();
 
-    // outer_wall_speed is the ratio_over target for small_perimeter_speed.
-    // Different values per extruder to verify parent resolves at the same element index.
+    // These settings are scalar in v2.4.2. Install vector fixtures explicitly
+    // to exercise vector parsing while retaining their ratio_over relationship.
+    config.set_key_value("outer_wall_speed", new ConfigOptionFloatsNullable{60, 70, 80, 90});
+    config.set_key_value("small_perimeter_speed", new ConfigOptionFloatsOrPercentsNullable());
     config.set_deserialize_strict({
-        { "outer_wall_speed", "60,70,80,90" },
         { "nozzle_diameter", "0.4,0.4,0.4,0.4" },
         { "pressure_advance", "1.5,2.0,3.0,4.0" }  // coFloats non-nullable
     });
