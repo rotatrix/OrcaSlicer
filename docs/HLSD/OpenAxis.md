@@ -76,7 +76,7 @@ external regression-suite pin when porting to a newer release.
 -> `build_deps.yml` -> `build_orca.yml` chain. It runs on Rotatrix branch pushes,
 PRs against maintained branches, and manual dispatch. Manual runs can select a
 platform family for isolated retries. The upstream matrix builds
-Windows x64/ARM64, Linux x64/ARM64, macOS arm64/x86_64 plus a universal DMG, and
+Windows x64/ARM64, Linux x64/ARM64, macOS arm64/x86_64 plus universal app bundles, and
 Flatpak x64/ARM64. Upstream Linux unit/regression tests are retained. The external
 regression suite is pinned to its last revision before the upstream release;
 update that pin when porting to another upstream version. OpenAxis
@@ -87,7 +87,20 @@ OpenAxis is opt-in for local builds. CI uses the SDK release specified in
 build scripts. Flatpak uses the same pinned SDK as an offline manifest source;
 update its commit when updating the SDK tag. Windows Store identity and upstream
 nightly publication remain restricted to the upstream repository. Test macOS
-bundles are ad-hoc signed; production signing needs Rotatrix credentials.
+bundles retain upstream app identity and are ad-hoc signed. Each architecture
+and the merged universal app are transported as `macos-app-<variant>-<sha>.tar.gz`,
+with exactly one upstream-named app at the archive root. The profile validator
+uses a separate `profile-validator-<architecture>` variant. Uploads use pinned
+`actions/upload-artifact` with `archive: false`; provenance is separate.
+Packaging checks all Mach-O architecture slices, bundle symlinks and signatures,
+and runs `--help` from a fresh extraction. The universal check runs natively;
+each architecture is also checked before merging.
+
+Release readiness remains pending: the existing release consumer still expects
+a DMG and must be migrated to the central signing workflow before any release
+tag is created. Developer ID signing, notarization, attestation and release
+publishing are outside this test-package change. Do not use the legacy release
+publisher for these ad-hoc packages.
 
 Artifacts include the source SHA, checksums and source/SDK/run manifests, and
 expire after 14 days. Routine branch/PR builds do not create releases or tags.

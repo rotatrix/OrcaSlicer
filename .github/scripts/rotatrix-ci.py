@@ -61,7 +61,7 @@ def record(platform, arch):
         build = Path('build-arm64' if arch == 'arm64' else 'build')
         patterns = [f'{build}/OrcaSlicer_Windows_*_portable.zip', f'{build}/OrcaSlicer_Windows_Installer_*.exe']
     elif platform == 'macos':
-        patterns = ['OrcaSlicer_Mac_universal_*.dmg']
+        patterns = [f'macos-app-universal-{commit}.tar.gz']
         app = 'build/universal/OrcaSlicer/OrcaSlicer.app'
         run('lipo', f'{app}/Contents/MacOS/OrcaSlicer', '-verify_arch', 'arm64', 'x86_64')
         run('codesign', '--verify', '--deep', '--strict', app)
