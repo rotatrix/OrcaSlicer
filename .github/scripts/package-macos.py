@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 import plistlib
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -40,6 +41,9 @@ def package(arch, commit):
                              b'\xca\xfe\xba\xbe', b'\xbe\xba\xfe\xca',
                              b'\xca\xfe\xba\xbf', b'\xbf\xba\xfe\xca'):
                     run('lipo', str(path), '-verify_arch', *architectures)
+        licenses = app / 'Contents/Resources'
+        licenses.mkdir(parents=True, exist_ok=True)
+        shutil.copy2('LICENSE.txt', licenses / 'LICENSE.txt')
         run('codesign', '--force', '--deep', '--sign', '-', str(app))
         archive = Path(f'macos-app-{variant}-{commit}.tar.gz').resolve()
         run('tar', '-czf', str(archive), '-C', str(directory), name,
