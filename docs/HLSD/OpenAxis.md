@@ -37,103 +37,18 @@ In a GUI build, verify rotation, pan, zoom, native mouse input after navigation,
 plate switching, selection-only picking, and focus loss in Prepare and Preview.
 Open and close the diagnostics panel and confirm viewport evidence follows it.
 
-## Fork branches and builds
+## Download and build identity
 
-The current port is development work on `rotatrix/work/v2.4.2`, based on the
-exact upstream `v2.4.2` tag. Work branches are disposable and may be rebased or
-squashed. When ready, organize the downstream changes into a clean patch stack
-and create `rotatrix/v2.4.2`. Published maintained branches are append-only;
-contributors open PRs against the relevant maintained branch. A new upstream
-version starts a new work branch from its own official tag.
+Rotatrix distributions use the upstream application identity and share its settings.
+Windows downloads are unsigned. macOS preview build artifacts are ad-hoc signed;
+release downloads use Developer ID signing and notarization.
 
-The default branch is temporarily the work branch while no maintained Rotatrix
-branch exists. Set it to `rotatrix/v2.4.2` on promotion. There is no rolling
-`rotatrix/stable` branch. Mirror upstream tag spelling, including the `v`.
+The SDK source is https://github.com/rotatrix/openaxis at `cpp/v1.0.0-rc.1`
+(`acc4da095cde6747556245b4b6c110c16b968b6b`). Its bundled IXWebSocket license
+and the OpenAxis license are included in packaged resources. OrcaSlicer's
+dependency versions, source URLs and patches remain in `deps/` and `deps_src/`.
 
-## Upstream CI
-
-The source and workflow baseline is official OrcaSlicer `v2.4.2`, commit
-`8500fcdccaa10b5099ac20d252af3a7c560046f1`; the workflows are adapted from that
-release, not copied from upstream main. Its dependency definitions, build
-options and architecture coverage are retained. Windows Store packaging remains
-upstream-only because its publisher identity is not Rotatrix's.
-
-Compatibility adjustments are separate from the OpenAxis and branding commits:
-Windows x64 uses `windows-2022` and an explicit MSVC environment; Perl is selected
-explicitly for dependency builds. Windows ARM64 predeclares the unavailable
-Fortran compiler for Eigen, avoiding a hung Visual Studio probe while retaining
-Eigen's normal no-Fortran path.
-ARM64 hosted Windows runners now select VS 2026, whose generator is unavailable
-in the required CMake 3.31. ARM64 CI therefore uses the upstream script's Ninja
-Multi-Config mode with the native MSVC environment for both dependencies and the
-application and overlay checks, with a separate VS 2026/Ninja cache key.
-Dependency sub-builds inherit Ninja instead of forcing a Visual Studio generator;
-OpenSSL uses the detected compiler architecture because Ninja has no platform flag.
-Its application target is Ninja's `all`; Visual Studio keeps
-`ALL_BUILD`. Dependency failures stop the workflow before packaging, so a failed
-configure cannot be reported as a successful dependency build.
-macOS retains `macos-14`, exports the selected SDK and Homebrew tools, and keeps
-the active Xcode installation. Linux dependency
-archives use the build script's `OrcaSlicer_dep` directory. Flatpak uses the
-container's Python and a scoped Git ownership exception for provenance. Build
-parallelism is bounded on hosted runners. No additional upstream compatibility
-commits were cherry-picked. The release's placeholder-parser vector test needs
-explicit vector fixtures because its production settings are scalar; assertions
-and production behavior are unchanged. Reassess these adjustments and the
-external regression-suite pin when porting to a newer release.
-
-`build_all.yml` is the active pipeline, reusing upstream's `build_check_cache.yml`
--> `build_deps.yml` -> `build_orca.yml` chain. It runs on Rotatrix branch pushes,
-PRs against maintained branches, and manual dispatch. Manual runs can select a
-platform family for isolated retries. The upstream matrix builds
-Windows x64/ARM64, Linux x64/ARM64, macOS arm64/x86_64 plus universal app bundles, and
-Flatpak x64/ARM64. Upstream Linux unit/regression tests are retained. The external
-regression suite is pinned to its last revision before the upstream release;
-update that pin when porting to another upstream version. OpenAxis
-checks and native startup checks run before distribution artifacts are uploaded.
-
-OpenAxis is opt-in for local builds. CI uses the SDK release specified in
-`cmake/OpenAxis.cmake`, includes its licenses, and enables it through upstream
-build scripts. Flatpak uses the same pinned SDK as an offline manifest source;
-update its commit when updating the SDK tag. Windows Store identity and upstream
-nightly publication remain restricted to the upstream repository. Test macOS
-bundles retain upstream app identity and are ad-hoc signed. Each architecture
-and the merged universal app are transported as `macos-app-<variant>-<sha>.tar.gz`,
-with exactly one upstream-named app at the archive root. The profile validator
-uses a separate `profile-validator-<architecture>` variant. Uploads use pinned
-`actions/upload-artifact` with `archive: false`; provenance is separate.
-Packaging checks all Mach-O architecture slices, bundle symlinks and signatures,
-and runs `--help` from a fresh extraction. The universal check runs natively;
-each architecture is also checked before merging. Non-system dynamic libraries
-must resolve inside the app through its loader/executable paths or inherited
-rpaths. Absolute development-machine dependencies (including XQuartz) and missing
-bundled libraries fail packaging; system framework install names remain allowed.
-
-The macOS script excludes third-party prefixes using CMake's semicolon-separated
-list, including both `/opt/X11` and `/usr/X11R6`. Existing dependency/application
-caches can retain old OpenGL results: reconfigure affected caches with
-`-U'OPENGL_*'` and the corrected ignore-prefix list, then rebuild/reinstall the
-affected dependencies and app. Changing the ignore list alone does not clear
-previously cached library paths.
-
-Release readiness remains pending: the existing release consumer still expects
-a DMG and must be migrated to the central signing workflow before any release
-tag is created. Developer ID signing, notarization, attestation and release
-publishing are outside this test-package change. Do not use the legacy release
-publisher for these ad-hoc packages.
-
-Artifacts include the source SHA, checksums and source/SDK/run manifests, and
-expire after 14 days. Routine branch/PR builds do not create releases or tags.
-An explicit immutable `<upstream-tag>-rotatrix.N` tag triggers a full build and
-calls the adapted upstream `publish_release.yml`. Every distribution and test
-job must pass; the release script verifies all nine distributions are from the
-same source, SDK and run before creating a draft. Final tags create regular
-drafts; `-beta.N`/`-rc.N` tags create prerelease drafts. Published releases are
-never overwritten. No release tags are created automatically. Reset N when the
-upstream version changes. GUI and hardware testing remain required.
-
-The former standalone OpenAxis workflow and packaging scripts were retired
-after all supported platform builds produced downloadable packages and the
-Linux regression/unit tests passed. The upstream pipeline is the sole build
-path. This remains a work branch; migration does not create a maintained branch
-or release.
+The macOS build excludes third-party prefixes with a semicolon-separated CMake
+ignore list. If an existing build retained XQuartz OpenGL paths, reconfigure
+affected dependency and app caches with `-U'OPENGL_*'` and the corrected
+`CMAKE_IGNORE_PREFIX_PATH`, then rebuild the affected targets.

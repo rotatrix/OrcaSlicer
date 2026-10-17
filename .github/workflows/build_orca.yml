@@ -29,17 +29,12 @@ jobs:
       ver_pure:
       ubuntu-ver: '2404'
       ubuntu-ver-str: '_Ubuntu2404'
-      ORCA_UPDATER_SIG_KEY: ${{ secrets.ORCA_UPDATER_SIG_KEY }}
-      # Branches whose builds are published to the nightly release. The
-      # belt-printer branch ships alongside main but its assets carry a `_belt`
-      # suffix (nightly_suffix) so they never overwrite the main nightly assets.
-      deploy_nightly: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/belt-printer' }}
-      nightly_suffix: ${{ github.ref == 'refs/heads/belt-printer' && '_belt' || '' }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          ref: ${{ github.sha }}
           lfs: 'false'
 
       - uses: actions/setup-python@v5
@@ -157,7 +152,9 @@ jobs:
         run: python .github/scripts/rotatrix-ci.py verify macos '${{ inputs.arch }}'
       - name: Package and smoke-test macOS apps
         if: runner.os == 'macOS' && !inputs.macos-combine-only
-        run: python .github/scripts/package-macos.py '${{ inputs.arch }}' '${{ github.sha }}'
+        run: |
+          python -m unittest discover -s .github/scripts/tests -v
+          python .github/scripts/package-macos.py '${{ inputs.arch }}' '${{ github.sha }}'
 
       - name: Upload macOS app
         if: runner.os == 'macOS' && !inputs.macos-combine-only
@@ -207,10 +204,6 @@ jobs:
         if: runner.os == 'macOS' && inputs.macos-combine-only
         run: python .github/scripts/package-macos.py universal '${{ github.sha }}'
 
-      - name: Record macOS provenance
-        if: runner.os == 'macOS' && inputs.macos-combine-only
-        run: python .github/scripts/rotatrix-ci.py record macos universal
-
       - name: Upload universal macOS app
         if: runner.os == 'macOS' && inputs.macos-combine-only
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -227,16 +220,6 @@ jobs:
           retention-days: 14
           archive: false
           path: macos-app-profile-validator-universal-${{ github.sha }}.tar.gz
-
-      - name: Upload macOS provenance separately
-        if: runner.os == 'macOS' && inputs.macos-combine-only
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          retention-days: 14
-          name: macos-provenance-${{ github.sha }}
-          path: |
-            macos-app-universal-${{ github.sha }}.tar.gz.sha256
-            macos-app-universal-${{ github.sha }}.tar.gz.json
 
 # Windows
       - name: Set Windows build variables
@@ -303,26 +286,26 @@ jobs:
         shell: cmd
         run: '"C:/Program Files/7-Zip/7z.exe" a -m0=lzma2 -mx9 Debug_PDB_${{ env.ver }}_for_developers_only.7z  *.pdb'
 
-      - name: Record Windows package provenance
+      - name: Stage Windows downloads
         if: runner.os == 'Windows'
-        run: python .github/scripts/rotatrix-ci.py record windows '${{ inputs.arch }}'
+        run: python .github/scripts/rotatrix-ci.py stage windows '${{ inputs.arch }}'
       - name: Upload artifacts Win zip
         if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           retention-days: 14
-          overwrite: true
-          name: Rotatrix-OrcaSlicer_Windows_${{ env.ver }}${{ env.ARCH_SUFFIX }}_portable-${{ github.sha }}
-          path: ${{ github.workspace }}/${{ env.BUILD_DIR }}/OrcaSlicer_Windows_${{ env.ver }}${{ env.ARCH_SUFFIX }}_portable.zip*
+          archive: false
+          if-no-files-found: error
+          path: artifacts/OrcaSlicer-windows-x64-${{ github.sha }}.zip
 
       - name: Upload artifacts Win installer
         if: runner.os == 'Windows' && !vars.SELF_HOSTED
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           retention-days: 14
-          overwrite: true
-          name: Rotatrix-OrcaSlicer_Windows_${{ env.ver }}${{ env.ARCH_SUFFIX }}-${{ github.sha }}
-          path: ${{ github.workspace }}/${{ env.BUILD_DIR }}/OrcaSlicer*.exe*
+          archive: false
+          if-no-files-found: error
+          path: artifacts/OrcaSlicer-windows-x64-${{ github.sha }}.exe
 
       - name: Upload artifacts Win PDB
         if: runner.os == 'Windows' && inputs.arch != 'arm64' && !vars.SELF_HOSTED
@@ -341,39 +324,6 @@ jobs:
           overwrite: true
           name: OrcaSlicer_profile_validator_Windows_${{ env.ver }}-${{ github.sha }}
           path: ${{ github.workspace }}/build/src/Release/OrcaSlicer_profile_validator.exe
-
-      - name: Deploy Windows release portable
-        if: github.repository == 'OrcaSlicer/OrcaSlicer' && env.deploy_nightly == 'true' && runner.os == 'Windows' && !vars.SELF_HOSTED
-        uses: WebFreak001/deploy-nightly@v3.2.0
-        with:
-          upload_url: https://uploads.github.com/repos/OrcaSlicer/OrcaSlicer/releases/137995723/assets{?name,label}
-          release_id: 137995723
-          asset_path: ${{ github.workspace }}/${{ env.BUILD_DIR }}/OrcaSlicer_Windows_${{ env.ver }}${{ env.ARCH_SUFFIX }}_portable.zip
-          asset_name: OrcaSlicer_Windows${{ env.ARCH_SUFFIX }}_nightly${{ env.nightly_suffix }}_portable.zip
-          asset_content_type: application/x-zip-compressed
-          max_releases: 1
-
-      - name: Deploy Windows release installer
-        if: github.repository == 'OrcaSlicer/OrcaSlicer' && env.deploy_nightly == 'true' && runner.os == 'Windows' && !vars.SELF_HOSTED
-        uses: WebFreak001/deploy-nightly@v3.2.0
-        with:
-          upload_url: https://uploads.github.com/repos/OrcaSlicer/OrcaSlicer/releases/137995723/assets{?name,label}
-          release_id: 137995723
-          asset_path: ${{ github.workspace }}/${{ env.BUILD_DIR }}/OrcaSlicer_Windows_Installer_${{ env.ver }}${{ env.ARCH_SUFFIX }}.exe
-          asset_name: OrcaSlicer_Windows_Installer${{ env.ARCH_SUFFIX }}_nightly${{ env.nightly_suffix }}.exe
-          asset_content_type: application/x-msdownload
-          max_releases: 1
-
-      - name: Deploy Windows OrcaSlicer_profile_validator release
-        if: github.repository == 'OrcaSlicer/OrcaSlicer' && github.ref == 'refs/heads/main' && runner.os == 'Windows' && inputs.arch != 'arm64' && !vars.SELF_HOSTED
-        uses: WebFreak001/deploy-nightly@v3.2.0
-        with:
-          upload_url: https://uploads.github.com/repos/OrcaSlicer/OrcaSlicer/releases/137995723/assets{?name,label}
-          release_id: 137995723
-          asset_path: ${{ github.workspace }}/build/src/Release/OrcaSlicer_profile_validator.exe
-          asset_name: OrcaSlicer_profile_validator_Windows_nightly.exe
-          asset_content_type: application/x-msdownload
-          max_releases: 1
 
       - name: Build MSIX Store package Win
         if: github.repository == 'OrcaSlicer/OrcaSlicer' && runner.os == 'Windows' && !vars.SELF_HOSTED
@@ -411,11 +361,8 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          # Build + tar the unit tests (-t) only on the leg that runs them: the
-          # aarch64 leg by default (faster GitHub arm runner), or amd64 when using
-          # self-hosted runners (no arm self-hosted server). unit_tests downloads
-          # this tarball. The profile validator is built with -s, so amd64 keeps it.
-          tests=${{ (!vars.SELF_HOSTED && inputs.arch == 'aarch64') || (vars.SELF_HOSTED && inputs.arch != 'aarch64') }}
+          # Build the upstream unit tests on the supported Linux x64 leg.
+          tests=true
           if $tests; then flags=-istrlL; else flags=-isrlL; fi
           ./build_linux.sh "$flags"
           ./scripts/check_appimage_libs.sh ./build/package ./build/package/bin/orca-slicer
@@ -427,7 +374,7 @@ jobs:
         # Use tar because upload-artifacts won't always preserve directory structure
         # and doesn't preserve file permissions
       - name: Upload Test Artifact
-        if: runner.os == 'Linux' && ((!vars.SELF_HOSTED && inputs.arch == 'aarch64') || (vars.SELF_HOSTED && inputs.arch != 'aarch64'))
+        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ github.sha }}-tests
@@ -463,17 +410,17 @@ jobs:
       - name: Verify OpenAxis Linux build
         if: runner.os == 'Linux'
         run: python .github/scripts/rotatrix-ci.py verify linux '${{ inputs.arch || 'x64' }}'
-      - name: Record Linux package provenance
+      - name: Stage Linux downloads
         if: runner.os == 'Linux'
-        run: python .github/scripts/rotatrix-ci.py record linux '${{ inputs.arch || 'x64' }}'
+        run: python .github/scripts/rotatrix-ci.py stage linux '${{ inputs.arch || 'x64' }}'
       - name: Upload artifacts Ubuntu
         if: ${{ ! env.ACT && runner.os == 'Linux' }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           retention-days: 14
-          overwrite: true
-          name: Rotatrix-OrcaSlicer_Linux_ubuntu_${{ env.ubuntu-ver }}${{ env.arch_suffix }}_${{ env.ver }}-${{ github.sha }}
-          path: "./build/OrcaSlicer_Linux_AppImage${{ env.ubuntu-ver-str }}${{ env.arch_suffix }}_${{ env.ver }}.AppImage*"
+          archive: false
+          if-no-files-found: error
+          path: artifacts/OrcaSlicer-linux-x64-${{ github.sha }}.AppImage
 
       - name: Upload OrcaSlicer_profile_validator Ubuntu
         if: ${{ ! env.ACT && runner.os == 'Linux' && !vars.SELF_HOSTED && inputs.arch != 'aarch64' }}
@@ -483,47 +430,6 @@ jobs:
           overwrite: true
           name: OrcaSlicer_profile_validator_Linux_ubuntu_${{ env.ubuntu-ver }}_${{ env.ver }}-${{ github.sha }}
           path: './build/src/Release/OrcaSlicer_profile_validator'
-
-      - name: Deploy Ubuntu release
-        if: ${{ github.repository == 'OrcaSlicer/OrcaSlicer' && ! env.ACT && env.deploy_nightly == 'true' && runner.os == 'Linux' && !vars.SELF_HOSTED }}
-        uses: WebFreak001/deploy-nightly@v3.2.0
-        with:
-          upload_url: https://uploads.github.com/repos/OrcaSlicer/OrcaSlicer/releases/137995723/assets{?name,label}
-          release_id: 137995723
-          asset_path: ./build/OrcaSlicer_Linux_AppImage${{ env.ubuntu-ver-str }}${{ env.arch_suffix }}_${{ env.ver }}.AppImage
-          asset_name: OrcaSlicer_Linux_AppImage${{ env.ubuntu-ver-str }}${{ env.arch_suffix }}_nightly${{ env.nightly_suffix }}.AppImage
-          asset_content_type: application/octet-stream
-          max_releases: 1 # optional, if there are more releases than this matching the asset_name, the oldest ones are going to be deleted
-      - name: Deploy Ubuntu release
-        if: ${{ github.repository == 'OrcaSlicer/OrcaSlicer' && ! env.ACT && github.ref == 'refs/heads/main' && runner.os == 'Linux' && !vars.SELF_HOSTED && inputs.arch != 'aarch64' }}
-        uses: rickstaa/action-create-tag@v1
-        with:
-          tag: "nightly-builds"
-          tag_exists_error: false
-          force_push_tag: true
-          message: "nightly-builds"
-
-      - name: Deploy Ubuntu OrcaSlicer_profile_validator release
-        if: ${{ github.repository == 'OrcaSlicer/OrcaSlicer' && ! env.ACT && github.ref == 'refs/heads/main' && runner.os == 'Linux' && !vars.SELF_HOSTED && inputs.arch != 'aarch64' }}
-        uses: WebFreak001/deploy-nightly@v3.2.0
-        with:
-          upload_url: https://uploads.github.com/repos/OrcaSlicer/OrcaSlicer/releases/137995723/assets{?name,label}
-          release_id: 137995723
-          asset_path: ./build/src/Release/OrcaSlicer_profile_validator
-          asset_name: OrcaSlicer_profile_validator_Linux${{ env.ubuntu-ver-str }}_nightly
-          asset_content_type: application/octet-stream
-          max_releases: 1
-
-      - name: Deploy orca_custom_preset_tests
-        if: ${{ github.repository == 'OrcaSlicer/OrcaSlicer' && ! env.ACT && github.ref == 'refs/heads/main' && runner.os == 'Linux' && !vars.SELF_HOSTED && inputs.arch != 'aarch64' }}
-        uses: WebFreak001/deploy-nightly@v3.2.0
-        with:
-          upload_url: https://uploads.github.com/repos/OrcaSlicer/OrcaSlicer/releases/137995723/assets{?name,label}
-          release_id: 137995723
-          asset_path: ${{ github.workspace }}/resources/profiles/orca_custom_preset_tests.zip
-          asset_name: orca_custom_preset_tests.zip
-          asset_content_type: application/octet-stream
-          max_releases: 1
 
       - name: Upload build diagnostics
         if: failure()
@@ -542,3 +448,9 @@ jobs:
             build/arm64/CMakeFiles/CMakeConfigureLog.yaml
             build/x86_64/CMakeFiles/CMakeConfigureLog.yaml
           retention-days: 14
+
+      - name: Attest macOS packages
+        if: runner.os == 'macOS' && github.repository == 'rotatrix/OrcaSlicer' && startsWith(github.ref, 'refs/heads/rotatrix/')
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: macos-app-*.tar.gz

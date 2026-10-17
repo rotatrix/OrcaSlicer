@@ -1,13 +1,7 @@
 name: PR Label Bot
 
 on:
-  pull_request_target:
-    types:
-      - opened
-      - reopened
-  issue_comment:
-    types:
-      - created
+  workflow_dispatch:
 
 permissions:
   contents: read

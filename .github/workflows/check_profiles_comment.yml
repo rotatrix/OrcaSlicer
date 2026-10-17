@@ -3,10 +3,7 @@ name: Post profile check comment
 # NOTE: The workflow name in the 'workflows' filter below must match the 'name'
 # field in check_profiles.yml exactly. If that name changes, update it here too.
 on:
-  workflow_run:
-    workflows: ["Check profiles"]
-    types:
-      - completed
+  workflow_dispatch:
 
 permissions:
   pull-requests: write

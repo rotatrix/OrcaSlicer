@@ -1,104 +1,156 @@
-"""Create a tagged release draft from verified artifacts in this workflow run."""
+"""Verify and stage exact CI outputs. No compilation or package rewriting."""
+import argparse
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import subprocess
-import sys
-import tempfile
+from urllib.parse import quote
+
+REPO = 'rotatrix/OrcaSlicer'
+WORKFLOW = '.github/workflows/build_all.yml'
+TAG = re.compile(r'(v[0-9]+\.[0-9]+\.[0-9]+)-rotatrix\.[1-9][0-9]*(?:-beta\.[1-9][0-9]*)?\Z')
 
 
-def validate_assets(directory, commit, run_id):
-    if not re.fullmatch(r'[0-9a-f]{40}', commit):
-        raise ValueError('Invalid source commit')
-    expected = {
-        ('windows-x64', '.zip'), ('windows-x64', '.exe'),
-        ('windows-arm64', '.zip'), ('windows-arm64', '.exe'),
-        ('macos-universal', '.dmg'),
-        ('linux-x64', '.AppImage'), ('linux-aarch64', '.AppImage'),
-        ('flatpak-x86_64', '.flatpak'), ('flatpak-aarch64', '.flatpak'),
-    }
-    assets, found, sdk_commits = [], set(), set()
-    for manifest in directory.glob('*.json'):
-        data = json.loads(manifest.read_text())
-        filename = data['file']
-        if Path(filename).name != filename or '/' in filename or '\\' in filename:
-            raise ValueError('Invalid package filename')
-        package = directory / filename
-        kind = (data['platform'], package.suffix)
-        if kind not in expected or kind in found:
-            raise ValueError(f'Unexpected or duplicate package: {kind}')
-        found.add(kind)
-        if not package.is_file() or not package.stat().st_size:
-            raise ValueError(f'Missing package: {filename}')
-        with package.open('rb') as stream:
-            digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-        checksum = package.with_name(package.name + '.sha256')
-        if checksum.read_text().split() != [digest, package.name]:
-            raise ValueError(f'Checksum mismatch: {filename}')
-        if data.get('commit') != commit or data.get('run_id') != run_id or data.get('sha256') != digest:
-            raise ValueError(f'Provenance mismatch: {filename}')
-        sdk = data.get('openaxis_commit', '')
-        if not re.fullmatch(r'[0-9a-f]{40}', sdk):
-            raise ValueError('Invalid SDK revision')
-        sdk_commits.add(sdk)
-        assets.extend([str(package), str(checksum), str(manifest)])
-    if found != expected:
-        raise ValueError(f'Missing platform packages: {expected - found}')
-    if len(sdk_commits) != 1:
-        raise ValueError('Platforms used different SDK revisions')
-    return assets
+def require(value, message):
+    if not value:
+        raise ValueError(message)
 
 
-def main():
-    commit, run_id, repo = (os.environ[k] for k in ['GITHUB_SHA', 'GITHUB_RUN_ID', 'GH_REPO'])
-    assets = validate_assets(Path(sys.argv[1]), commit, run_id)
-    if os.environ.get('GITHUB_REF_TYPE') != 'tag':
-        raise ValueError('Releases require an explicit release tag')
-    tag = os.environ['GITHUB_REF_NAME']
-    match = re.fullmatch(r'(v?\d+\.\d+\.\d+)-rotatrix\.([1-9]\d*)(?:-(beta|rc)\.([1-9]\d*))?', tag)
-    if not match:
-        raise ValueError('Expected <upstream-tag>-rotatrix.N[-beta.N|-rc.N]')
-    upstream = match[1]
-    version = re.search(r'set\(SoftFever_VERSION "([^"]+)"\)', Path('version.inc').read_text())[1]
-    if upstream.removeprefix('v') != version:
-        raise ValueError('Release tag does not match the source version')
-    tagged_commit = subprocess.check_output(['git', 'rev-parse', f'refs/tags/{tag}^{{commit}}'], text=True).strip()
-    if tagged_commit != commit:
-        raise ValueError('Release tag does not point to the built commit')
-    prerelease = match[3] is not None
-    # Include drafts and fail closed on API/auth errors.
-    pages = json.loads(subprocess.check_output(
-        ['gh', 'api', '--paginate', '--slurp', f'repos/{repo}/releases'], text=True))
-    matches = [release for page in pages for release in page if release['tag_name'] == tag]
-    if matches:
-        if len(matches) != 1 or not matches[0]['draft'] or matches[0]['prerelease'] != prerelease or matches[0]['target_commitish'] != commit:
-            raise ValueError('Existing release is not the matching release draft')
-        subprocess.run(['gh', 'release', 'upload', tag, *assets, '--clobber'], check=True)
-        return
-    notes = f'''OrcaSlicer {tag} - Rotatrix Build (unofficial)
+def api(path):
+    return json.loads(subprocess.check_output(['gh', 'api', f'repos/{REPO}/{path}'], text=True))
 
-Built from commit {commit}. All three platforms passed compilation, viewport
-checks and package smoke checks in the same Actions run:
-https://github.com/{repo}/actions/runs/{run_id}
 
-Packages: Windows x64/ARM64 installers and portable ZIPs, macOS universal DMG,
-Linux x64/ARM64 AppImages, and x64/ARM64 Flatpaks. Checksums and source manifests
-accompany each package.
+def pages(path, key):
+    result = []
+    for page in range(1, 101):
+        rows = api(f'{path}{"&" if "?" in path else "?"}per_page=100&page={page}')[key]
+        result.extend(rows)
+        if len(rows) < 100:
+            return result
+    raise ValueError('Unexpected pagination limit')
 
-Windows is unsigned and requires the Microsoft Visual C++ x64 Redistributable.
-macOS is ad-hoc signed and not notarized. GUI and Rotatrix hardware testing
-remain required before publication. This is not an official OrcaSlicer release.
-'''
-    with tempfile.TemporaryDirectory() as temp:
-        path = Path(temp) / 'notes.md'
-        path.write_text(notes, encoding='utf-8')
-        subprocess.run(['gh', 'release', 'create', tag, *assets, '--verify-tag', '--draft',
-                        *(['--prerelease'] if prerelease else []),
-                        '--target', commit, '--title', f'OrcaSlicer {tag} - Rotatrix Build (unofficial)',
-                        '--notes-file', str(path)], check=True)
+
+def tag_commit(tag):
+    obj = api('git/ref/tags/' + quote(tag, safe=''))['object']
+    for _ in range(8):
+        if obj['type'] == 'commit':
+            return obj['sha']
+        require(obj['type'] == 'tag', 'Tag does not identify a commit')
+        obj = api('git/tags/' + obj['sha'])['object']
+    raise ValueError('Excessively nested tag')
+
+
+def validate_run(run, sha):
+    require(run['repository']['full_name'] == REPO and run['head_repository']['full_name'] == REPO,
+            'Build must originate in rotatrix/OrcaSlicer')
+    require(run['path'] == WORKFLOW, 'Unapproved build workflow')
+    require(run['event'] in ('push', 'workflow_dispatch') and
+            re.fullmatch(r'rotatrix/[A-Za-z0-9._/-]+', run.get('head_branch') or ''),
+            'Only trusted Rotatrix branch builds can be promoted; PRs are excluded')
+    require(run['head_sha'] == sha, 'Build SHA differs from immutable tag')
+    require(run['status'] == 'completed' and run['conclusion'] == 'success', 'Build has not succeeded')
+
+
+def expected(sha):
+    return {*(f'OrcaSlicer-windows-x64-{sha}.{ext}' for ext in ('zip', 'exe')),
+            *(f'OrcaSlicer-linux-x64-{sha}.{ext}' for ext in ('AppImage', 'flatpak')),
+            *(f'macos-app-{arch}-{sha}.tar.gz' for arch in ('arm64', 'x86_64', 'universal'))}
+
+
+def digest(path):
+    with path.open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+
+def require_new_release(tag):
+    existing = json.loads(subprocess.check_output(
+        ['gh', 'api', '--paginate', '--slurp', f'repos/{REPO}/releases?per_page=100'], text=True))
+    require(not any(r['tag_name'] == tag for page in existing for r in page),
+            'Release or draft exists; inspect it before retrying')
+
+
+def prepare(tag, run_id, output):
+    require(not output.exists() or not any(output.iterdir()), 'Use an empty promotion directory')
+    match = TAG.fullmatch(tag)
+    require(match, 'Invalid OrcaSlicer release tag')
+    require_new_release(tag)
+    sha = tag_commit(tag)
+    base = tag_commit(match[1])
+    require(api(f'compare/{base}...{sha}')['status'] in ('ahead', 'identical'),
+            'Release does not descend from the upstream tag')
+    require(run_id and run_id > 0, 'Select an explicit build run ID')
+    run = api(f'actions/runs/{run_id}')
+    validate_run(run, sha)
+    jobs = pages(f'actions/runs/{run_id}/jobs?filter=latest', 'jobs')
+    required = {'Unit Tests', 'Flatpak', 'Build macOS Universal / Build OrcaSlicer',
+                'Build Windows x64 / Build Deps / Build OrcaSlicer / Build OrcaSlicer',
+                'build_linux / Build Deps / Build OrcaSlicer / Build OrcaSlicer',
+                *(f'build_macos_arch ({arch}) / Build Deps / Build OrcaSlicer / Build OrcaSlicer'
+                  for arch in ('arm64', 'x86_64'))}
+    require(required <= {j['name'] for j in jobs if j['conclusion'] == 'success'},
+            'Missing required platform checks; focused-only runs cannot be promoted alone')
+    artifacts = pages(f'actions/runs/{run_id}/artifacts', 'artifacts')
+    selected = [a for a in artifacts if a['name'] in expected(sha)]
+    require(len(selected) == len(expected(sha)) and {a['name'] for a in selected} == expected(sha),
+            'Missing or duplicate required packages')
+    output.mkdir(parents=True, exist_ok=True)
+    records = []
+    for artifact in selected:
+        require(not artifact['expired'] and artifact['workflow_run']['id'] == run_id and
+                artifact['workflow_run']['head_sha'] == sha, 'Expired or mismatched artifact')
+        require(re.fullmatch(r'sha256:[0-9a-f]{64}', artifact.get('digest') or ''), 'Artifact has no digest')
+        path = output / artifact['name']
+        with path.open('wb') as stream:
+            subprocess.run(['gh', 'api', f'repos/{REPO}/actions/artifacts/{artifact["id"]}/zip'],
+                           stdout=stream, check=True)
+        require('sha256:' + digest(path) == artifact['digest'], 'Downloaded artifact digest mismatch')
+        records.append(dict(id=artifact['id'], name=path.name, sha256=digest(path)))
+    prerelease = '-beta.' in tag
+    require(tag_commit(tag) == sha, 'Tag changed during verification')
+    plan = dict(repository=REPO, tag=tag, commit=sha, run_id=run_id, run_attempt=run['run_attempt'],
+                source_ref='refs/heads/' + run['head_branch'], prerelease=prerelease,
+                artifacts=records)
+    (output / 'promotion.json').write_text(json.dumps(plan, indent=2) + '\n')
+    with open(os.environ.get('GITHUB_OUTPUT', os.devnull), 'a') as stream:
+        stream.write('mac-artifacts=' + ','.join(str(r['id']) for r in records if r['name'].startswith('macos-app-')) + '\n')
+    return plan
+
+
+def draft(directory):
+    plan = json.loads((directory / 'promotion.json').read_text())
+    require(plan['repository'] == REPO and TAG.fullmatch(plan['tag']), 'Invalid release selection')
+    require(tag_commit(plan['tag']) == plan['commit'], 'Tag moved before draft creation')
+    require_new_release(plan['tag'])
+    files = []
+    for record in plan['artifacts']:
+        if record['name'].startswith('macos-app-'):
+            continue
+        path = directory / record['name']
+        require(digest(path) == record['sha256'], 'Staged package changed')
+        files.append(path)
+    signed = sorted((directory / 'signed').glob('*.tar.gz'))
+    require(len(signed) == 3, 'Expected signed ARM64, Intel and universal macOS packages')
+    files += signed
+    sums = directory / 'SHA256SUMS'
+    sums.write_text(''.join(f'{digest(p)}  {p.name}\n' for p in files))
+    command = ['gh', 'release', 'create', plan['tag'], *map(str, files), str(sums),
+               '--repo', REPO, '--verify-tag', '--draft', '--title', 'OrcaSlicer ' + plan['tag'] + ' (Rotatrix unofficial)',
+               '--notes', f'Source: {plan["commit"]}\nBuild: https://github.com/{REPO}/actions/runs/{plan["run_id"]}']
+    if plan['prerelease']:
+        command.append('--prerelease')
+    subprocess.run(command, check=True)
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('command', choices=['prepare', 'draft'])
+    parser.add_argument('--tag')
+    parser.add_argument('--run-id', type=int)
+    parser.add_argument('--directory', type=Path, default=Path('promotion'))
+    args = parser.parse_args()
+    if args.command == 'prepare':
+        print(json.dumps(prepare(args.tag, args.run_id, args.directory), indent=2))
+    else:
+        draft(args.directory)

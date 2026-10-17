@@ -1,5 +1,5 @@
 name: Backfill Duplicate Comments
-description: Triggers duplicate detection for old issues that don't have duplicate comments
+# description: Triggers duplicate detection for old issues that don't have duplicate comments
 
 on:
   workflow_dispatch:

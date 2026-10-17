@@ -1,6 +1,4 @@
 """Small OpenAxis additions around upstream build and packaging commands."""
-import hashlib
-import json
 import os
 from pathlib import Path
 import re
@@ -53,41 +51,34 @@ def verify(platform, arch):
     subprocess.run(command, check=True, timeout=120)
 
 
-def record(platform, arch):
-    commit = subprocess.check_output(['git', '-c', f'safe.directory={Path.cwd().as_posix()}', 'rev-parse', 'HEAD'], text=True).strip()
-    if commit != os.environ['GITHUB_SHA']:
-        raise ValueError('Checkout differs from workflow source SHA')
-    sdk = os.environ['OPENAXIS_COMMIT']
-    if platform == 'windows':
-        build = Path('build-arm64' if arch == 'arm64' else 'build')
-        patterns = [f'{build}/OrcaSlicer_Windows_*_portable.zip', f'{build}/OrcaSlicer_Windows_Installer_*.exe']
-    elif platform == 'macos':
-        patterns = [f'macos-app-universal-{commit}.tar.gz']
-        app = 'build/universal/OrcaSlicer/OrcaSlicer.app'
-        run('lipo', f'{app}/Contents/MacOS/OrcaSlicer', '-verify_arch', 'arm64', 'x86_64')
-        run('codesign', '--verify', '--deep', '--strict', app)
-    elif platform == 'linux':
+def stage(platform, arch):
+    """Give native packages stable, exact-SHA download names without repacking."""
+    commit = os.environ['GITHUB_SHA']
+    if not re.fullmatch(r'[0-9a-f]{40}', commit):
+        raise ValueError('Expected full source SHA')
+    actual = subprocess.check_output(['git', '-c', f'safe.directory={Path.cwd().as_posix()}', 'rev-parse', 'HEAD'], text=True).strip()
+    if actual != commit:
+        raise ValueError('Checkout differs from workflow commit')
+    if platform == 'windows' and arch == 'x64':
+        patterns = ['build/OrcaSlicer_Windows_*_portable.zip', 'build/OrcaSlicer_Windows_Installer_*.exe']
+    elif platform == 'linux' and arch == 'x64':
         patterns = ['build/OrcaSlicer_Linux_AppImage*.AppImage']
-    elif platform == 'flatpak':
+    elif platform == 'flatpak' and arch == 'x86_64':
         manifest = Path('scripts/flatpak/com.orcaslicer.OrcaSlicer.yml').read_text()
-        if f'commit: {sdk}' not in manifest:
-            raise ValueError('Flatpak SDK pin differs from native builds')
-        patterns = [f'OrcaSlicer-Linux-flatpak_*_{arch}.flatpak']
+        if f"commit: {os.environ['OPENAXIS_COMMIT']}" not in manifest:
+            raise ValueError('Flatpak SDK differs from native builds')
+        patterns = ['OrcaSlicer-Linux-flatpak_*_x86_64.flatpak']
+        platform = 'linux'
     else:
-        raise ValueError(platform)
+        raise ValueError('Unsupported distribution platform')
+    output = Path('artifacts')
+    output.mkdir(exist_ok=True)
     for pattern in patterns:
         packages = list(Path('.').glob(pattern))
-        if len(packages) != 1:
-            raise ValueError(f'Expected exactly one package for {pattern}: {packages}')
+        if len(packages) != 1 or not packages[0].stat().st_size:
+            raise ValueError(f'Expected one nonempty package: {pattern}')
         package = packages[0]
-        if not package.stat().st_size:
-            raise ValueError('Empty package')
-        with package.open('rb') as stream:
-            digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-        package.with_name(package.name + '.sha256').write_text(f'{digest}  {package.name}\n')
-        package.with_name(package.name + '.json').write_text(json.dumps(dict(
-            commit=commit, openaxis_commit=sdk, run_id=os.environ['GITHUB_RUN_ID'],
-            platform=f'{platform}-{arch}', file=package.name, sha256=digest), indent=2)+'\n')
+        shutil.copy2(package, output / f'OrcaSlicer-{platform}-x64-{commit}{package.suffix}')
 
 
 if __name__ == '__main__':
@@ -95,7 +86,7 @@ if __name__ == '__main__':
         prepare()
     elif sys.argv[1] == 'verify':
         verify(*sys.argv[2:])
-    elif sys.argv[1] == 'record':
-        record(*sys.argv[2:])
+    elif sys.argv[1] == 'stage':
+        stage(*sys.argv[2:])
     else:
         raise SystemExit('Unknown command')

@@ -15,7 +15,7 @@ on:
       force-build:
         required: false
         type: boolean
-  
+
 jobs:
   check_cache: # determines if there is a cache and outputs variables used in caching process
     name: Check Cache
@@ -28,8 +28,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          ref: ${{ github.sha }}
           lfs: 'false'
-        
+
       - name: set outputs
         id: set_outputs
         env:
@@ -43,7 +44,7 @@ jobs:
         run: |
           echo cache-key=${{ env.cache-os }}${{ runner.os == 'Windows' && inputs.arch == 'arm64' && '-vs2026-ninja' || '' }}-cache-orcaslicer_deps-build-${{ hashFiles('deps/**') }} >> ${{ env.output-cmd }}
           echo cache-path=${{ github.workspace }}/deps/build${{ env.dep-folder-name }} >> ${{ env.output-cmd }}
-            
+
       - name: load cache
         id: cache_deps
         uses: actions/cache@v5
@@ -51,7 +52,7 @@ jobs:
           path: ${{ steps.set_outputs.outputs.cache-path }}
           key: ${{ steps.set_outputs.outputs.cache-key }}
           lookup-only: true
-        
+
   build_deps: # call next step
     name: Build Deps
     needs: [check_cache]

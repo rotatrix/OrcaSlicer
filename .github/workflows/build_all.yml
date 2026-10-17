@@ -1,19 +1,17 @@
 name: Build all
 
 on:
-  push:
-    branches: ['rotatrix/**']
-    tags: ['*-rotatrix.*']
-  pull_request:
-    branches: ['rotatrix/*']
-
   workflow_dispatch: # allows for manual dispatch
     inputs:
+      candidate-sha:
+        description: Approved full commit SHA (must match the selected workflow ref)
+        type: string
+        required: true
       platform:
         description: Platform family (all for complete validation)
         type: choice
         default: all
-        options: [all, windows, windows-arm64, linux, macos, flatpak]
+        options: [all, windows, linux, macos, flatpak]
       build-deps-only:
         description: 'Only build dependencies (bypasses caching)'
         type: boolean
@@ -21,88 +19,85 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}-${{ inputs.platform || 'all' }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 
 jobs:
+  candidate:
+    name: Verify candidate
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require the approved exact source
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate-sha }}
+        run: |
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ && "$CANDIDATE_SHA" == "$GITHUB_SHA" ]]
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Release selection regression tests
+        run: python -m unittest discover -s .github/scripts/tests -v
   build_linux:
-    strategy:
-      fail-fast: false
-      # Build both arches on every event (PRs included), through the same
-      # build_check_cache -> build_deps -> build_orca chain (the AppImage).
-      # aarch64 always uses the GitHub-hosted arm runner (there is no arm
-      # self-hosted server). amd64's empty arch is load-bearing: it keeps the
-      # historical 'linux-clang' deps cache key and the unsuffixed asset names.
-      matrix:
-        include:
-          - arch: ""
-            os: ${{ vars.SELF_HOSTED && 'orca-lnx-server' || 'ubuntu-24.04' }}
-          - arch: "aarch64"
-            os: ubuntu-24.04-arm
-    # Don't run scheduled builds on forks:
-    if: ${{ (inputs.platform == '' || inputs.platform == 'all' || inputs.platform == 'linux') && !cancelled() && (github.event_name != 'schedule' || github.repository == 'OrcaSlicer/OrcaSlicer') }}
+    needs: candidate
+    if: inputs.platform == 'all' || inputs.platform == 'linux'
     uses: ./.github/workflows/build_check_cache.yml
     with:
-      os: ${{ matrix.os }}
-      arch: ${{ matrix.arch }}
-      build-deps-only: ${{ inputs.build-deps-only || false }}
+      os: ubuntu-24.04
+      build-deps-only: ${{ inputs.build-deps-only }}
     secrets: inherit
   build_windows:
-    name: Build Windows ${{ matrix.arch }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJSON(inputs.platform == 'windows-arm64' && '[{"arch":"arm64","os":"windows-11-arm"}]' || '[{"arch":"x64","os":"windows-2022"},{"arch":"arm64","os":"windows-11-arm"}]') }}
-    # Don't run scheduled builds on forks:
-    if: ${{ (inputs.platform == '' || inputs.platform == 'all' || inputs.platform == 'windows' || inputs.platform == 'windows-arm64') && !cancelled() && (github.event_name != 'schedule' || github.repository == 'OrcaSlicer/OrcaSlicer') }}
+    name: Build Windows x64
+    needs: candidate
+    if: inputs.platform == 'all' || inputs.platform == 'windows'
     uses: ./.github/workflows/build_check_cache.yml
     with:
-      # Self-hosted runner is x64-only; ARM64 always uses the GitHub-hosted runner.
-      os: ${{ (matrix.arch == 'x64' && vars.SELF_HOSTED) && 'orca-win-server' || matrix.os }}
-      arch: ${{ matrix.arch }}
-      build-deps-only: ${{ inputs.build-deps-only || false }}
-      force-build: ${{ github.event_name == 'schedule' }}
+      os: windows-2022
+      arch: x64
+      build-deps-only: ${{ inputs.build-deps-only }}
     secrets: inherit
   build_macos_arch:
+    needs: candidate
     strategy:
       fail-fast: false
       matrix:
         arch:
           - arm64
           - x86_64
-    # Don't run scheduled builds on forks:
-    if: ${{ (inputs.platform == '' || inputs.platform == 'all' || inputs.platform == 'macos') && !cancelled() && (github.event_name != 'schedule' || github.repository == 'OrcaSlicer/OrcaSlicer') }}
+    if: ${{ (inputs.platform == 'all' || inputs.platform == 'macos') && !cancelled() }}
     uses: ./.github/workflows/build_check_cache.yml
     with:
-      os: ${{ vars.SELF_HOSTED && 'orca-macos-arm64' || 'macos-14' }}
+      os: macos-14
       arch: ${{ matrix.arch }}
       build-deps-only: ${{ inputs.build-deps-only || false }}
-      force-build: ${{ github.event_name == 'schedule' }}
     secrets: inherit
   build_macos_universal:
     name: Build macOS Universal
     needs: build_macos_arch
-    if: ${{ !cancelled() && needs.build_macos_arch.result == 'success' && !inputs.build-deps-only && (github.event_name != 'schedule' || github.repository == 'OrcaSlicer/OrcaSlicer') }}
+    if: ${{ !cancelled() && needs.build_macos_arch.result == 'success' && !inputs.build-deps-only }}
     uses: ./.github/workflows/build_orca.yml
     with:
-      os: ${{ vars.SELF_HOSTED && 'orca-macos-arm64' || 'macos-14' }}
+      os: macos-14
       arch: universal
       macos-combine-only: true
     secrets: inherit
   unit_tests:
     name: Unit Tests
-    # Tests are built on the aarch64 leg by default (faster GitHub arm runner),
-    # so run them there; self-hosted builds them on the amd64 server instead.
-    runs-on: ${{ vars.SELF_HOSTED && 'orca-lnx-server' || 'ubuntu-24.04-arm' }}
+    runs-on: ubuntu-24.04
     needs: build_linux
     if: ${{ !cancelled() && success() && !inputs.build-deps-only }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          ref: ${{ github.sha }}
           sparse-checkout: |
             .github
             scripts
@@ -141,6 +136,7 @@ jobs:
           check_run: false
           comment_mode: off
   flatpak:
+    needs: candidate
     name: "Flatpak"
     container:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-50
@@ -151,30 +147,20 @@ jobs:
         - /opt/ghc:/opt/ghc1
         - /usr/local/share/boost:/usr/local/share/boost1
         - /opt/hostedtoolcache:/opt/hostedtoolcache1
-    strategy:
-      fail-fast: false
-      matrix:
-        variant:
-          - arch: x86_64
-            runner: ubuntu-24.04
-          - arch: aarch64
-            runner: ubuntu-24.04-arm
-    # Don't run scheduled builds on forks; skip entirely on self-hosted runners
-    if: ${{ (inputs.platform == '' || inputs.platform == 'all' || inputs.platform == 'flatpak') && !cancelled() && !inputs.build-deps-only && !vars.SELF_HOSTED && (github.event_name != 'schedule' || github.repository == 'OrcaSlicer/OrcaSlicer') }}
+    if: ${{ (inputs.platform == '' || inputs.platform == 'all' || inputs.platform == 'flatpak') && !cancelled() && !inputs.build-deps-only }}
 
-    runs-on: ${{ matrix.variant.runner }}
+    runs-on: ubuntu-24.04
     env:
       date:
       ver:
       ver_pure:
-      # Belt-printer nightlies share the main nightly release but carry a `_belt`
-      # suffix so they never overwrite the main assets.
-      nightly_suffix: ${{ github.ref == 'refs/heads/belt-printer' && '_belt' || '' }}
     steps:
     - name: "Remove unneeded stuff to free disk space"
       run:
         rm -rf /usr/local/lib/android/* /usr/share/dotnet/* /opt/ghc1/* "/usr/local/share/boost1/*" /opt/hostedtoolcache1/*
     - uses: actions/checkout@v6
+      with:
+        ref: ${{ github.sha }}
     - name: Prepare OpenAxis
       run: python3 .github/scripts/rotatrix-ci.py prepare
     - name: Get the version and date
@@ -198,16 +184,16 @@ jobs:
       uses: actions/cache/restore@v5
       with:
         path: .flatpak-builder
-        key: flatpak-builder-${{ matrix.variant.arch }}-${{ github.event.pull_request.base.sha }}
-        restore-keys: flatpak-builder-${{ matrix.variant.arch }}-
+        key: flatpak-builder-x86_64-${{ github.event.pull_request.base.sha }}
+        restore-keys: flatpak-builder-x86_64-
     - name: Restore flatpak-builder cache for branch builds
       id: flatpak_cache
       if: github.event_name != 'pull_request'
       uses: actions/cache/restore@v5
       with:
         path: .flatpak-builder
-        key: flatpak-builder-${{ matrix.variant.arch }}-${{ github.sha }}
-        restore-keys: flatpak-builder-${{ matrix.variant.arch }}-
+        key: flatpak-builder-x86_64-${{ github.sha }}
+        restore-keys: flatpak-builder-x86_64-
     - name: Disable debug info for faster CI builds
       run: |
         sed -i '/^build-options:/a\  no-debuginfo: true\n  strip: true' \
@@ -220,42 +206,23 @@ jobs:
       shell: bash
     - uses: flatpak/flatpak-github-actions/flatpak-builder@master
       with:
-        bundle: OrcaSlicer-Linux-flatpak_${{ env.ver }}_${{ matrix.variant.arch }}.flatpak
+        bundle: OrcaSlicer-Linux-flatpak_${{ env.ver }}_x86_64.flatpak
         manifest-path: scripts/flatpak/com.orcaslicer.OrcaSlicer.yml
         cache: false
-        arch: ${{ matrix.variant.arch }}
+        arch: x86_64
         upload-artifact: false
     - name: Save successful Flatpak build cache
       if: github.event_name != 'pull_request' && steps.flatpak_cache.outputs.cache-hit != 'true'
       uses: actions/cache/save@v5
       with:
         path: .flatpak-builder
-        key: flatpak-builder-${{ matrix.variant.arch }}-${{ github.sha }}
-    - name: Record Flatpak provenance
-      run: python3 .github/scripts/rotatrix-ci.py record flatpak '${{ matrix.variant.arch }}'
+        key: flatpak-builder-x86_64-${{ github.sha }}
+    - name: Stage Flatpak download
+      run: python3 .github/scripts/rotatrix-ci.py stage flatpak 'x86_64'
     - name: Upload artifacts Flatpak
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
       with:
         retention-days: 14
-        overwrite: true
-        name: Rotatrix-OrcaSlicer-Linux-flatpak_${{ env.ver }}_${{ matrix.variant.arch }}-${{ github.sha }}
-        path: '/__w/OrcaSlicer/OrcaSlicer/OrcaSlicer-Linux-flatpak_${{ env.ver }}_${{ matrix.variant.arch }}.flatpak*'
-    - name: Deploy Flatpak to nightly release
-      if: github.repository == 'OrcaSlicer/OrcaSlicer' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/belt-printer')
-      uses: WebFreak001/deploy-nightly@v3.2.0
-      with:
-        upload_url: https://uploads.github.com/repos/OrcaSlicer/OrcaSlicer/releases/137995723/assets{?name,label}
-        release_id: 137995723
-        asset_path: /__w/OrcaSlicer/OrcaSlicer/OrcaSlicer-Linux-flatpak_${{ env.ver }}_${{ matrix.variant.arch }}.flatpak
-        asset_name: OrcaSlicer-Linux-flatpak_nightly${{ env.nightly_suffix }}_${{ matrix.variant.arch }}.flatpak
-        asset_content_type: application/octet-stream
-        max_releases: 1 # optional, if there are more releases than this matching the asset_name, the oldest ones are going to be deleted
-
-  release:
-    name: Tagged Rotatrix release draft
-    needs: [build_windows, build_linux, build_macos_universal, unit_tests, flatpak]
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-    uses: ./.github/workflows/publish_release.yml
-    permissions:
-      contents: write
-      actions: read
+        archive: false
+        if-no-files-found: error
+        path: artifacts/OrcaSlicer-linux-x64-${{ github.sha }}.flatpak

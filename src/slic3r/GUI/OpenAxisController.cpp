@@ -104,8 +104,6 @@ void OpenAxisController::refresh(bool focused, int x, int y, int width, int heig
     m_last_view = m_camera.get_view_matrix();
     m_last_zoom = m_camera.get_zoom();
     m_last_projection = m_camera.get_type();
-    if (!m_enabled)
-        return;
     const bool available = viewport_available();
     focused = focused && available;
     const std::string context = available ? context_key() : "";
@@ -135,10 +133,6 @@ void OpenAxisController::render_diagnostics(bool &visible) {
     if (visible) {
         if (ImGui::Begin("OpenAxis Diagnostics", &visible,
                          ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
-            if (ImGui::Checkbox("Enable navigation", &m_enabled)) {
-                if (!m_enabled) deactivate();
-                m_redraw();
-            }
             ImGui::Text("Rotatrix: %s", m_connection.status().state.c_str());
             ImGui::Text("Focus: %s | Gesture: %s", m_focused ? "Yes" : "No",
                         m_session.active() ? "Active" : "Idle");
@@ -146,7 +140,7 @@ void OpenAxisController::render_diagnostics(bool &visible) {
         ImGui::End();
     }
     m_diagnostics_visible = visible;
-    m_collector.set_enabled(visible && m_enabled && viewport_available());
+    m_collector.set_enabled(visible && viewport_available());
     m_collector.set_context(m_context);
     render_overlay();
     schedule_diagnostic_expiry();
@@ -175,12 +169,12 @@ struct OpenAxisController::QueryCapture final : openaxis::NavigationCapture {
     }
 };
 openaxis::NavigationContext OpenAxisController::capture_context() {
-    if (!m_enabled || !m_focused || !viewport_available()) return {};
+    if (!m_focused || !viewport_available()) return {};
     return context_key();
 }
 bool OpenAxisController::is_current(const openaxis::NavigationContext &context) {
     const auto *key = std::any_cast<std::string>(&context);
-    return key && m_enabled && m_focused && viewport_available() && *key == context_key();
+    return key && m_focused && viewport_available() && *key == context_key();
 }
 std::unique_ptr<openaxis::NavigationCapture>
 OpenAxisController::begin_query(const openaxis::NavigationContext &context) {

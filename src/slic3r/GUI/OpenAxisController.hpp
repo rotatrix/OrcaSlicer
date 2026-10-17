@@ -53,7 +53,6 @@ class OpenAxisController final : public openaxis::NavigationAdapter {
     int m_width = 0, m_height = 0;
     double m_scale = 1;
     std::string m_context;
-    bool m_enabled = true;
     bool m_focused = false;
     int m_x = 0, m_y = 0;
     std::optional<openaxis::Vec3> m_pivot;

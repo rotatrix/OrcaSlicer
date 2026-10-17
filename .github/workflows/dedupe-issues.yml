@@ -1,8 +1,6 @@
 name: Orca Issue Dedupe
-description: Automatically dedupe GitHub issues using AI
+# description: Automatically dedupe GitHub issues using AI
 on:
-  issues:
-    types: [opened]
   workflow_dispatch:
     inputs:
       issue_number:

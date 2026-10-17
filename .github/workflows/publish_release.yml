@@ -1,29 +1,65 @@
-name: Publish Rotatrix release draft
+name: Prepare release draft
 
 on:
-  workflow_call:
+  workflow_dispatch:
+    inputs:
+      release-tag:
+        description: Existing immutable tag at the tested commit
+        type: string
+        required: true
+      build-run-id:
+        description: Successful full-platform build at that exact commit
+        type: string
+        required: true
 
 permissions:
-  contents: write
+  contents: read
   actions: read
 
+concurrency:
+  group: release-${{ inputs.release-tag }}
+  cancel-in-progress: false
+
 jobs:
-  publish:
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+  draft:
+    if: github.repository == 'rotatrix/OrcaSlicer' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    permissions:
+      contents: write
+      actions: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      # Consume only the upstream distribution artifacts from this exact run.
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: Rotatrix-*-${{ github.sha }}
-          path: release-assets
-          merge-multiple: true
-      - name: Validate and assemble release draft
+      - name: Select existing build packages
+        id: select
         env:
           GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: python .github/scripts/openaxis-release.py release-assets
+          RELEASE_TAG: ${{ inputs.release-tag }}
+          BUILD_RUN_ID: ${{ inputs.build-run-id }}
+        run: python3 .github/scripts/openaxis-release.py prepare --tag "$RELEASE_TAG" --run-id "$BUILD_RUN_ID"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: rotatrix/release-signing
+          ref: 7657ec4d3c937ef92c5ccca7d32b7df9ce15b801 # shared signing client with source entitlements
+          token: ${{ secrets.SIGNER_DISPATCH_TOKEN }}
+          path: .signer
+          persist-credentials: false
+      - name: Request signed macOS packages
+        uses: ./.signer/actions/sign
+        with:
+          token: ${{ secrets.SIGNER_DISPATCH_TOKEN }}
+          source-repository: ${{ github.repository }}
+          source-run-id: ${{ inputs.build-run-id }}
+          artifact-ids: ${{ steps.select.outputs.mac-artifacts }}
+          release-tag: ${{ inputs.release-tag }}
+          source-entitlements: src/dev-utils/platform/osx/entitlements.plist
+          output-directory: promotion/signed
+      - name: Create draft with final downloads and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/openaxis-release.py draft
