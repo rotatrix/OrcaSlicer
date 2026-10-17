@@ -34,7 +34,8 @@ def verify(platform, arch):
     if 'SLIC3R_OPENAXIS:BOOL=ON' not in (build / 'CMakeCache.txt').read_text():
         raise ValueError('OpenAxis was not enabled')
     checks = build / 'openaxis-checks'
-    run('cmake', '-S', 'tests/openaxis', '-B', str(checks), '-DCMAKE_BUILD_TYPE=Release')
+    generator = ['-G', 'Ninja Multi-Config'] if platform == 'windows' and arch == 'arm64' else []
+    run('cmake', '-S', 'tests/openaxis', '-B', str(checks), '-DCMAKE_BUILD_TYPE=Release', *generator)
     run('cmake', '--build', str(checks), '--config', 'Release', '--parallel', '2')
     run('ctest', '--test-dir', str(checks), '-C', 'Release', '--output-on-failure')
     if platform == 'windows':

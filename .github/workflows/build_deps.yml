@@ -144,12 +144,16 @@ jobs:
             }
             $arch = "${{ inputs.arch }}"
             if ($arch -eq "arm64") {
-              .\build_release_vs.bat deps arm64
-              .\build_release_vs.bat pack arm64
+              # CMake 3.31 supports the ARM64 assembler but not VS 2026's generator.
+              .\build_release_vs.bat deps arm64 -x
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              .\build_release_vs.bat pack arm64 -x
             } else {
               .\build_release_vs.bat deps
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
               .\build_release_vs.bat pack
             }
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         shell: pwsh
 
       - name: Build on Mac ${{ inputs.arch }}

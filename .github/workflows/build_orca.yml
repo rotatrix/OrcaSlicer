@@ -275,7 +275,8 @@ jobs:
         #   WindowsSDKVersion: '10.0.26100.0\'
         run: |
           $arch = "${{ inputs.arch }}"
-          if ($arch -eq "arm64") { .\build_release_vs.bat slicer arm64 } else { .\build_release_vs.bat slicer }
+          if ($arch -eq "arm64") { .\build_release_vs.bat slicer arm64 -x } else { .\build_release_vs.bat slicer }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         shell: pwsh
 
       - name: Verify OpenAxis Windows build

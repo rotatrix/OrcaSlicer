@@ -62,8 +62,16 @@ Compatibility adjustments are separate from the OpenAxis and branding commits:
 Windows x64 uses `windows-2022` and an explicit MSVC environment; Perl is selected
 explicitly for dependency builds. Windows ARM64 predeclares the unavailable
 Fortran compiler for Eigen, avoiding a hung Visual Studio probe while retaining
-Eigen's normal no-Fortran path. macOS retains `macos-14`, exports the selected
-SDK and Homebrew tools, and keeps the active Xcode installation. Linux dependency
+Eigen's normal no-Fortran path.
+ARM64 hosted Windows runners now select VS 2026, whose generator is unavailable
+in the required CMake 3.31. ARM64 CI therefore uses the upstream script's Ninja
+Multi-Config mode with the native MSVC environment for both dependencies and the
+application and overlay checks, with a separate VS 2026/Ninja cache key.
+Its application target is Ninja's `all`; Visual Studio keeps
+`ALL_BUILD`. Dependency failures stop the workflow before packaging, so a failed
+configure cannot be reported as a successful dependency build.
+macOS retains `macos-14`, exports the selected SDK and Homebrew tools, and keeps
+the active Xcode installation. Linux dependency
 archives use the build script's `OrcaSlicer_dep` directory. Flatpak uses the
 container's Python and a scoped Git ownership exception for provenance. Build
 parallelism is bounded on hosted runners. No additional upstream compatibility

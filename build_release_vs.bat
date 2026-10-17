@@ -153,7 +153,7 @@ set CMAKE_POLICY_VERSION_MINIMUM=3.5
 if "%USE_NINJA%"=="1" (
     cmake .. -G %CMAKE_GENERATOR% -DORCA_TOOLS=ON -DSLIC3R_OPENAXIS=%SLIC3R_OPENAXIS% "-DOPENAXIS_SOURCE_DIR=%OPENAXIS_SOURCE_DIR%" %SIG_FLAG% -DCMAKE_BUILD_TYPE=%build_type%
     if errorlevel 1 exit /b 1
-    cmake --build . --config %build_type% --target ALL_BUILD
+    cmake --build . --config %build_type% --target all
     if errorlevel 1 exit /b 1
 ) else (
     cmake .. -G %CMAKE_GENERATOR% -A %arch% -DORCA_TOOLS=ON -DSLIC3R_OPENAXIS=%SLIC3R_OPENAXIS% "-DOPENAXIS_SOURCE_DIR=%OPENAXIS_SOURCE_DIR%" %SIG_FLAG% -DCMAKE_BUILD_TYPE=%build_type%
