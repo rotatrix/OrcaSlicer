@@ -67,6 +67,8 @@ ARM64 hosted Windows runners now select VS 2026, whose generator is unavailable
 in the required CMake 3.31. ARM64 CI therefore uses the upstream script's Ninja
 Multi-Config mode with the native MSVC environment for both dependencies and the
 application and overlay checks, with a separate VS 2026/Ninja cache key.
+Dependency sub-builds inherit Ninja instead of forcing a Visual Studio generator;
+OpenSSL uses the detected compiler architecture because Ninja has no platform flag.
 Its application target is Ninja's `all`; Visual Studio keeps
 `ALL_BUILD`. Dependency failures stop the workflow before packaging, so a failed
 configure cannot be reported as a successful dependency build.
