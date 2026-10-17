@@ -4,6 +4,10 @@ set -e
 set -o pipefail
 SECONDS=0
 
+# CMake path lists use semicolons. Exclude both XQuartz installation aliases so
+# local development libraries cannot replace native macOS frameworks.
+export CMAKE_IGNORE_PREFIX_PATH="${CMAKE_IGNORE_PREFIX_PATH:-/opt/local;/usr/local;/opt/homebrew;/opt/X11;/usr/X11R6}"
+
 while getopts ":dpa:snt:xbc:i:1Tuh" opt; do
   case "${opt}" in
     d )
@@ -57,7 +61,7 @@ while getopts ":dpa:snt:xbc:i:1Tuh" opt; do
         echo "   -x: Use Ninja Multi-Config CMake generator, default is Xcode"
         echo "   -b: Build without reconfiguring CMake"
         echo "   -c: Set CMake build configuration, default is Release"
-        echo "   -i: Add a prefix to ignore during CMake dependency discovery (repeatable), defaults to /opt/local:/usr/local:/opt/homebrew"
+        echo "   -i: Add a prefix to ignore during CMake dependency discovery (repeatable), defaults to /opt/local;/usr/local;/opt/homebrew;/opt/X11;/usr/X11R6"
         echo "   -1: Use single job for building"
         echo "   -T: Build and run tests"
         exit 0
@@ -96,10 +100,6 @@ fi
 
 if [ -z "$OSX_DEPLOYMENT_TARGET" ]; then
   export OSX_DEPLOYMENT_TARGET="11.3"
-fi
-
-if [ -z "$CMAKE_IGNORE_PREFIX_PATH" ]; then
-  export CMAKE_IGNORE_PREFIX_PATH="/opt/local:/usr/local:/opt/homebrew"
 fi
 
 CMAKE_VERSION=$(cmake --version | head -1 | sed 's/[^0-9]*\([0-9]*\).*/\1/')

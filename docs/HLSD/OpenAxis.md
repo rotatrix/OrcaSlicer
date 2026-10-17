@@ -94,7 +94,17 @@ uses a separate `profile-validator-<architecture>` variant. Uploads use pinned
 `actions/upload-artifact` with `archive: false`; provenance is separate.
 Packaging checks all Mach-O architecture slices, bundle symlinks and signatures,
 and runs `--help` from a fresh extraction. The universal check runs natively;
-each architecture is also checked before merging.
+each architecture is also checked before merging. Non-system dynamic libraries
+must resolve inside the app through its loader/executable paths or inherited
+rpaths. Absolute development-machine dependencies (including XQuartz) and missing
+bundled libraries fail packaging; system framework install names remain allowed.
+
+The macOS script excludes third-party prefixes using CMake's semicolon-separated
+list, including both `/opt/X11` and `/usr/X11R6`. Existing dependency/application
+caches can retain old OpenGL results: reconfigure affected caches with
+`-U'OPENGL_*'` and the corrected ignore-prefix list, then rebuild/reinstall the
+affected dependencies and app. Changing the ignore list alone does not clear
+previously cached library paths.
 
 Release readiness remains pending: the existing release consumer still expects
 a DMG and must be migrated to the central signing workflow before any release
