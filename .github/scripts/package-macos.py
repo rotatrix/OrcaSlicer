@@ -13,6 +13,71 @@ def run(*args, **kwargs):
     return subprocess.run(args, check=True, **kwargs)
 
 
+def audit_dependencies(app, executable, binaries):
+    """Follow dyld load paths from the app, including inherited LC_RPATH entries."""
+    app = app.resolve()
+    executable_dir = (app / executable).parent
+    visited = set()
+
+    def expand(value, loader):
+        for token, directory in (('@loader_path', loader.parent),
+                                 ('@executable_path', executable_dir)):
+            if value == token or value.startswith(token + '/'):
+                return Path(os.path.normpath(str(directory) + value[len(token):]))
+        if value.startswith('/'):
+            return Path(os.path.normpath(value))
+        return None
+
+    def system(path):
+        # Runtime system paths also cover SDK framework imports: Mach-O records
+        # their system install names, not the developer machine's SDK directory.
+        return str(path).startswith(('/usr/lib/', '/System/Library/',
+                                     '/Library/Apple/System/Library/'))
+
+    def visit(binary, inherited):
+        binary = binary.resolve()
+        if binary in visited:
+            return
+        visited.add(binary)
+        loads, rpaths, command = [], [], None
+        for line in subprocess.check_output(['otool', '-l', str(binary)], text=True).splitlines():
+            line = line.strip()
+            if line.startswith('cmd '):
+                command = line.split()[1]
+            elif command == 'LC_RPATH' and line.startswith('path '):
+                value = expand(line[5:].rsplit(' (offset ', 1)[0], binary)
+                if value is not None:
+                    rpaths.append(value)
+            elif command in ('LC_LOAD_DYLIB', 'LC_LOAD_WEAK_DYLIB', 'LC_REEXPORT_DYLIB',
+                             'LC_LOAD_UPWARD_DYLIB', 'LC_LAZY_LOAD_DYLIB') and line.startswith('name '):
+                loads.append(line[5:].rsplit(' (offset ', 1)[0])
+        rpaths += inherited
+        for dependency in loads:
+            if dependency.startswith('/') and system(Path(os.path.normpath(dependency))):
+                continue
+            if dependency.startswith('@rpath/'):
+                candidates = [Path(os.path.normpath(str(base / dependency[7:]))) for base in rpaths]
+            elif dependency.startswith(('@loader_path/', '@executable_path/')):
+                candidates = [expand(dependency, binary)]
+            else:
+                candidates = []
+            for candidate in candidates:
+                if candidate is not None and system(candidate):
+                    break
+                if candidate is not None and candidate.is_file():
+                    if not candidate.resolve().is_relative_to(app):
+                        raise ValueError(f'Unbundled non-system dependency: {binary}: {dependency} -> {candidate}')
+                    visit(candidate, rpaths)
+                    break
+            else:
+                raise ValueError(f'Unbundled non-system dependency: {binary}: {dependency}')
+        return rpaths
+
+    root_rpaths = visit(app / executable, []) or []
+    for binary in binaries:
+        visit(binary, root_rpaths)
+
+
 def package(arch, commit):
     if arch not in ('arm64', 'x86_64', 'universal') or not re.fullmatch(r'[0-9a-f]{40}', commit):
         raise ValueError('Expected architecture and full source SHA')
@@ -29,6 +94,7 @@ def package(arch, commit):
         if name == 'OrcaSlicer.app' and (info['CFBundleIdentifier'] != 'com.orcaslicer.OrcaSlicer'
                                        or info['CFBundleName'] != 'OrcaSlicer'):
             raise ValueError('Main app must retain upstream identity')
+        binaries = []
         # Reject links to checkout resources and partially merged universal binaries.
         for path in app.rglob('*'):
             if path.is_symlink() and (not path.exists() or not path.resolve().is_relative_to(app.resolve())):
@@ -40,7 +106,9 @@ def package(arch, commit):
                              b'\xfe\xed\xfa\xcf', b'\xcf\xfa\xed\xfe',
                              b'\xca\xfe\xba\xbe', b'\xbe\xba\xfe\xca',
                              b'\xca\xfe\xba\xbf', b'\xbf\xba\xfe\xca'):
+                    binaries.append(path)
                     run('lipo', str(path), '-verify_arch', *architectures)
+        audit_dependencies(app, executable, binaries)
         licenses = app / 'Contents/Resources'
         licenses.mkdir(parents=True, exist_ok=True)
         shutil.copy2('LICENSE.txt', licenses / 'LICENSE.txt')
