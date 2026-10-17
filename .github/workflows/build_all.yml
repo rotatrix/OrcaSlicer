@@ -71,7 +71,7 @@ jobs:
         arch:
           - arm64
           - x86_64
-    if: ${{ (inputs.platform == 'all' || inputs.platform == 'macos') && !cancelled() }}
+    if: ${{ needs.candidate.result == 'success' && (inputs.platform == 'all' || inputs.platform == 'macos') && !cancelled() }}
     uses: ./.github/workflows/build_check_cache.yml
     with:
       os: macos-14
@@ -147,7 +147,7 @@ jobs:
         - /opt/ghc:/opt/ghc1
         - /usr/local/share/boost:/usr/local/share/boost1
         - /opt/hostedtoolcache:/opt/hostedtoolcache1
-    if: ${{ (inputs.platform == '' || inputs.platform == 'all' || inputs.platform == 'flatpak') && !cancelled() && !inputs.build-deps-only }}
+    if: ${{ needs.candidate.result == 'success' && (inputs.platform == 'all' || inputs.platform == 'flatpak') && !cancelled() && !inputs.build-deps-only }}
 
     runs-on: ubuntu-24.04
     env:
