@@ -12,6 +12,7 @@
 #include <limits>
 #include <boost/log/trivial.hpp>
 #include <wx/dialog.h>
+#include <wx/modalhook.h>
 
 namespace Slic3r::GUI {
 using openaxis::Value;
@@ -34,6 +35,9 @@ openaxis::OpenAxisClientOptions options(openaxis::Scheduler *scheduler) {
 }
 // Application activation does not imply viewport interaction during a dialog.
 bool modal_dialog_open() {
+    // Native file choosers need not appear in wxTopLevelWindows.
+    if (wxModalDialogHook::GetOpenCount() > 0)
+        return true;
 #ifdef __APPLE__
     if (wxDialog::OSXHasModalDialogsOpen())
         return true;
