@@ -2298,6 +2298,15 @@ void GCodeViewer::load_shells(const Print& print, bool initialized, bool force_p
         % m_shells.print_id % m_shells.print_modify_count % object_count %m_shells.volumes.volumes.size();
 }
 
+#ifdef SLIC3R_OPENAXIS
+void GCodeViewer::render_openaxis_geometry()
+{
+    const Camera& camera = wxGetApp().plater()->get_camera();
+    m_viewer.render(libvgcode::convert(static_cast<Matrix4f>(camera.get_view_matrix().matrix().cast<float>())),
+        libvgcode::convert(static_cast<Matrix4f>(camera.get_projection_matrix().matrix().cast<float>())));
+}
+#endif
+
 void GCodeViewer::render_toolpaths()
 {
     const Camera& camera = wxGetApp().plater()->get_camera();

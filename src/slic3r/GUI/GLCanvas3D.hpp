@@ -752,6 +752,7 @@ public:
     void toggle_openaxis_diagnostics() { m_openaxis_diagnostics = !m_openaxis_diagnostics; set_as_dirty(); }
     std::uint64_t openaxis_scene_revision() const { return m_openaxis_scene_revision; }
     void update_openaxis_projection();
+    std::optional<Vec3d> openaxis_gcode_hit(const Vec2d& pixel);
 #endif
 
     void set_context(wxGLContext* context) { m_context = context; }

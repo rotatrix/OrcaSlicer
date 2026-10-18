@@ -300,6 +300,14 @@ Value OpenAxisController::fact(const std::string &name) {
                 if (id >= 0 && id % PartPlate::GRABBER_COUNT == 0)
                     test(*item, item->get_transform(), nullptr);
             }
+        // Rendered toolpaths are separate from the model mesh raycasters.
+        if (!only)
+            if (const auto hit = m_canvas.openaxis_gcode_hit(pixel)) {
+                const double distance = (*hit - c.get_position()).squaredNorm();
+                if (distance < closest)
+                    result = {{"point", openaxis::vector_value(vector(*hit))},
+                              {"markerPosition", {pixel.x() / m_scale, pixel.y() / m_scale}}};
+            }
         return result;
     }
     return nullptr;

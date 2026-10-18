@@ -21,6 +21,9 @@ Plate body meshes participate in ordinary picks; plate toolbar icons and gizmos
 do not. Selection picks use selected model volumes. Plate placement is already
 baked into its picking mesh and must not be translated again.
 G-code Preview registers the current plate body without its toolbar icons.
+Ordinary Preview picks also sample visible toolpath geometry in a separate depth
+buffer, respecting the viewer's current layer and visibility filters. Selection
+picks remain limited to selected model volumes.
 
 Help > OpenAxis Diagnostics opens a compact connection, focus, and gesture panel.
 Viewport evidence is enabled while the panel is open; the pivot remains visible

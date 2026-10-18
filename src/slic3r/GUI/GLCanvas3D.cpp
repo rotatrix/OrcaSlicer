@@ -1252,6 +1252,80 @@ void GLCanvas3D::update_openaxis_projection()
     wxGetApp().plater()->get_camera().apply_projection(_max_bounding_box(true, true, true));
 }
 
+std::optional<Vec3d> GLCanvas3D::openaxis_gcode_hit(const Vec2d& pixel)
+{
+    // Toolpaths have no raycasters. Use an isolated depth attachment, never the
+    // displayed scene buffer or the full G-code renderer (which also runs ImGui).
+    if (m_canvas_type != ECanvasType::CanvasPreview || current_printer_technology() == ptSLA || !m_gcode_viewer.has_data() || !_set_current())
+        return std::nullopt;
+    const Camera& camera = wxGetApp().plater()->get_camera();
+    const Eigen::Vector4i viewport(camera.get_viewport().data());
+    const int x = int(pixel.x()), y = viewport[3] - 1 - int(pixel.y());
+    if (x < 0 || x >= viewport[2] || y < 0 || y >= viewport[3])
+        return std::nullopt;
+    if (!GLAD_GL_VERSION_3_0 && !GLAD_GL_ARB_framebuffer_object)
+        return std::nullopt;
+    struct DepthPass {
+        GLint draw_fbo, read_fbo, renderbuffer, viewport[4], depth_func, pack_buffer;
+        GLboolean depth_write, depth_test, scissor;
+        GLdouble clear_depth;
+        GLuint fbo = 0, depth = 0;
+        DepthPass() {
+            glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &draw_fbo);
+            glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &read_fbo);
+            glGetIntegerv(GL_RENDERBUFFER_BINDING, &renderbuffer);
+            glGetIntegerv(GL_VIEWPORT, viewport);
+            glGetIntegerv(GL_DEPTH_FUNC, &depth_func);
+            glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &pack_buffer);
+            glGetBooleanv(GL_DEPTH_WRITEMASK, &depth_write);
+            depth_test = glIsEnabled(GL_DEPTH_TEST);
+            scissor = glIsEnabled(GL_SCISSOR_TEST);
+            glGetDoublev(GL_DEPTH_CLEAR_VALUE, &clear_depth);
+            glGenFramebuffers(1, &fbo);
+            glGenRenderbuffers(1, &depth);
+        }
+        ~DepthPass() {
+            glBindFramebuffer(GL_DRAW_FRAMEBUFFER, draw_fbo);
+            glBindFramebuffer(GL_READ_FRAMEBUFFER, read_fbo);
+            glBindRenderbuffer(GL_RENDERBUFFER, renderbuffer);
+            glBindBuffer(GL_PIXEL_PACK_BUFFER, pack_buffer);
+            glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+            glDepthFunc(depth_func);
+            glDepthMask(depth_write);
+            glClearDepth(clear_depth);
+            if (!depth_test) glDisable(GL_DEPTH_TEST);
+            if (scissor) glEnable(GL_SCISSOR_TEST);
+            glDeleteRenderbuffers(1, &depth);
+            glDeleteFramebuffers(1, &fbo);
+        }
+    } pass;
+    glBindFramebuffer(GL_FRAMEBUFFER, pass.fbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, pass.depth);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, viewport[2], viewport[3]);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, pass.depth);
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        return std::nullopt;
+    glViewport(0, 0, viewport[2], viewport[3]);
+    glDisable(GL_SCISSOR_TEST);
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    glDepthMask(GL_TRUE);
+    glClearDepth(1.0);
+    glClear(GL_DEPTH_BUFFER_BIT);
+    m_gcode_viewer.render_openaxis_geometry();
+    float depth = 1.0f;
+    glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+    glsafe(::glReadPixels(x, y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &depth));
+    if (!(depth < 1.0f))
+        return std::nullopt;
+    Vec3d out;
+    igl::unproject(Vec3d(viewport[0] + x + 0.5, viewport[1] + y + 0.5, double(depth)), camera.get_view_matrix().matrix(),
+        camera.get_projection_matrix().matrix(), viewport, out);
+    return out;
+}
+
 void GLCanvas3D::refresh_openaxis()
 {
     if (!m_openaxis || !m_canvas) return;
