@@ -201,7 +201,6 @@ private:
     void render_only_numbers(bool bottom);
     void render_plate_name_texture();
     void invalidate_plate_name_texture();
-    void register_raycasters_for_picking(GLCanvas3D& canvas, bool body_only = false);
     int picking_id_component(int idx) const;
 
     void on_filament_map_mode_change();
@@ -405,6 +404,7 @@ public:
     bool contains(const BoundingBoxf3& bb) const;
     bool intersects(const BoundingBoxf3& bb) const;
 
+    void register_raycasters_for_picking(GLCanvas3D& canvas, bool body_only = false);
     void render(const Transform3d& view_matrix, const Transform3d& projection_matrix, bool bottom, bool only_body = false, bool force_background_color = false, HeightLimitMode mode = HEIGHT_LIMIT_NONE, int hover_id = -1, bool render_cali = false, bool show_grid = true);
 
     void set_selected();
