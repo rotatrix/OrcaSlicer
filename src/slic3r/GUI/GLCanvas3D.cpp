@@ -3138,6 +3138,10 @@ void GLCanvas3D::load_gcode_preview(const GCodeProcessorResult& gcode_result, co
     PartPlate* plate = partplate_list.get_curr_plate();
     const std::vector<BoundingBoxf3>& exclude_bounding_box = plate->get_exclude_areas();
 
+    // Preview displays the current plate body, without the model-view toolbar.
+    m_scene_raycaster.remove_raycasters(SceneRaycaster::EType::Bed);
+    plate->register_raycasters_for_picking(*this, true);
+
     //BBS: init is called in GLCanvas3D.render()
     //when load gcode directly, it is too late
     m_gcode_viewer.init(wxGetApp().get_mode(), wxGetApp().preset_bundle);

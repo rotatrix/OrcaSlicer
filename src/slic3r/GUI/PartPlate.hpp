@@ -201,7 +201,7 @@ private:
     void render_only_numbers(bool bottom);
     void render_plate_name_texture();
     void invalidate_plate_name_texture();
-    void register_raycasters_for_picking(GLCanvas3D& canvas);
+    void register_raycasters_for_picking(GLCanvas3D& canvas, bool body_only = false);
     int picking_id_component(int idx) const;
 
     void on_filament_map_mode_change();

@@ -58,6 +58,7 @@ private:
     // Distance between camera position and camera target measured along the camera Z axis
     double m_distance{ DefaultDistance };
     double m_gui_scale{ 1.0 };
+    bool m_auto_adjust_distance{ true };
 
     std::array<int, 4> m_viewport;
     Transform3d m_view_matrix{ Transform3d::Identity() };
@@ -174,6 +175,8 @@ public:
     void load_camera_view(Camera& cam);
 
     void look_at(const Vec3d& position, const Vec3d& target, const Vec3d& up);
+    // External navigation clips near-eye geometry instead of moving the camera.
+    void set_external_view(const Vec3d& position, const Vec3d& target, const Vec3d& up, double zoom);
 
     double max_zoom() const { return 250.0; }
     double min_zoom() const { return 0.2 * calc_zoom_to_bounding_box_factor(m_scene_box); }

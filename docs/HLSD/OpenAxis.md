@@ -10,13 +10,17 @@ with OrcaSlicer's bundled JSON target so both use the same JSON types and ABI.
 The SDK connects to Rotatrix on localhost and schedules navigation on the wx UI
 thread. Each viewport owns its connection and cancels gestures when focus,
 model, plate, dimensions, or scene revision change. Pose writes use the native
-camera and projection calculation, returning the realized pose after clamping;
-native camera changes are reconciled with the session.
+camera while preserving the user's projection preference. The native orbit target
+stays on the viewing axis at the pivot's depth, including off-center pivots.
+Close-range navigation clips near-eye geometry instead of moving the camera away;
+native fit-to-bed/object restores normal scene fitting. Writes return the realized
+pose, and native camera changes are reconciled with the session.
 
 Picks use the existing mesh raycasters without changing native hover state.
 Plate body meshes participate in ordinary picks; plate toolbar icons and gizmos
 do not. Selection picks use selected model volumes. Plate placement is already
 baked into its picking mesh and must not be translated again.
+G-code Preview registers the current plate body without its toolbar icons.
 
 Help > OpenAxis Diagnostics opens a compact connection, focus, and gesture panel.
 Viewport evidence is enabled while the panel is open; the pivot remains visible

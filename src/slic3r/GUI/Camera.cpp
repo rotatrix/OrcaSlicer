@@ -282,7 +282,7 @@ void Camera::apply_projection(const BoundingBoxf3& box, double near_z, double fa
     m_frustrum_zs = calc_tight_frustrum_zs_around(box);
 
     if (near_z > 0.0)
-        m_frustrum_zs.first = std::max(std::min(m_frustrum_zs.first, near_z), FrustrumMinNearZ);
+        m_frustrum_zs.first = std::max(std::min(m_frustrum_zs.first, near_z), m_auto_adjust_distance ? FrustrumMinNearZ : 0.01);
 
     if (far_z > 0.0)
         m_frustrum_zs.second = std::max(m_frustrum_zs.second, far_z);
@@ -347,6 +347,7 @@ void Camera::apply_projection(double left, double right, double bottom, double t
 
 void Camera::zoom_to_box(const BoundingBoxf3& box, double margin_factor)
 {
+    m_auto_adjust_distance = true;
     // Calculate the zoom factor needed to adjust the view around the given box.
     const double zoom = calc_zoom_to_bounding_box_factor(box, margin_factor);
     if (zoom > 0.0) {
@@ -358,6 +359,7 @@ void Camera::zoom_to_box(const BoundingBoxf3& box, double margin_factor)
 
 void Camera::zoom_to_volumes(const GLVolumePtrs& volumes, double margin_factor)
 {
+    m_auto_adjust_distance = true;
     Vec3d center;
     const double zoom = calc_zoom_to_volumes_factor(volumes, center, margin_factor);
     if (zoom > 0.0) {
@@ -524,7 +526,11 @@ std::pair<double, double> Camera::calc_tight_frustrum_zs_around(const BoundingBo
         far_z = mid_z + half_size;
     }
 
-    if (near_z < FrustrumMinNearZ) {
+    if (!m_auto_adjust_distance) {
+        near_z = std::max(near_z, 0.01);
+        far_z = std::max(far_z, near_z + FrustrumMinZRange);
+    }
+    else if (near_z < FrustrumMinNearZ) {
         const double delta = FrustrumMinNearZ - near_z;
         set_distance(m_distance + delta);
         near_z += delta;
@@ -673,6 +679,8 @@ void Camera::set_distance(double distance)
 
 void Camera::load_camera_view(Camera& cam)
 {
+    m_distance = cam.get_distance();
+    m_auto_adjust_distance = cam.m_auto_adjust_distance;
     m_target = cam.get_target();
     m_zoom = cam.get_zoom();
     m_scene_box = cam.get_scene_box();
@@ -682,6 +690,13 @@ void Camera::load_camera_view(Camera& cam)
     m_view_rotation = cam.get_view_rotation();
     m_frustrum_zs = cam.get_z_range();
     m_zenit = cam.get_zenit();
+}
+
+void Camera::set_external_view(const Vec3d& position, const Vec3d& target, const Vec3d& up, double zoom)
+{
+    look_at(position, target, up);
+    m_zoom = zoom;
+    m_auto_adjust_distance = false;
 }
 
 void Camera::look_at(const Vec3d& position, const Vec3d& target, const Vec3d& up)

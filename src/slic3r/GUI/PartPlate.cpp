@@ -1478,9 +1478,11 @@ static void register_model_for_picking(GLCanvas3D &canvas, PickingModel &model, 
     canvas.add_raycaster_for_picking(SceneRaycaster::EType::Bed, id, *model.mesh_raycaster, Transform3d::Identity());
 }
 
-void PartPlate::register_raycasters_for_picking(GLCanvas3D &canvas)
+void PartPlate::register_raycasters_for_picking(GLCanvas3D &canvas, bool body_only)
 {
     register_model_for_picking(canvas, m_triangles, picking_id_component(0));
+    if (body_only)
+        return;
     register_model_for_picking(canvas, m_del_icon, picking_id_component(1));
     register_model_for_picking(canvas, m_orient_icon, picking_id_component(2));
     register_model_for_picking(canvas, m_arrange_icon, picking_id_component(3));

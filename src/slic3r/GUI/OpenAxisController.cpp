@@ -219,14 +219,25 @@ bool OpenAxisController::write_camera(const openaxis::Pose &p) {
         ~Writing() { flag = false; }
     } writing(m_writing_camera);
     auto &c = m_camera;
-    c.set_type(p.fov > 0 ? Camera::EType::Perspective : Camera::EType::Ortho);
     auto q = openaxis::Quat::from_rotvec(p.r);
     const Vec3d position = vector(p.t), forward = vector(q.rotate({0, 0, -1}));
-    // Preserve the native orbit radius while updating its quaternion and target.
-    // Native mouse input then continues from exactly the realized SDK pose.
-    const double distance = std::max(1.0, m_pivot ? (position - vector(*m_pivot)).norm() : c.get_distance());
-    c.look_at(position, position + distance * forward, vector(q.rotate({0, 1, 0})));
-    c.set_zoom(p.fov > 0 ? m_height / (2 * distance * std::tan(p.fov / 2)) : m_height / p.ortho_extent);
+    // Keep the native target on-axis at the pivot's depth, without turning toward
+    // an off-center pivot. Retain the previous distance for a pivot behind the eye.
+    double distance = std::max(1e-6, c.get_distance());
+    if (m_pivot) {
+        const double depth = (vector(*m_pivot) - position).dot(forward);
+        if (std::isfinite(depth) && depth > 1e-6)
+            distance = depth;
+    }
+    double zoom = c.get_zoom() * (c.get_type() == Camera::EType::Perspective ? c.get_distance() / distance : 1.0);
+    // Projection is a native user preference. On a mismatch preserve its scale;
+    // realized-pose readback lets the SDK rebase onto the native projection.
+    const double height = c.get_viewport()[3];
+    if (c.get_type() == Camera::EType::Perspective && p.fov > 0)
+        zoom = height / (2 * distance * std::tan(p.fov / 2));
+    else if (c.get_type() == Camera::EType::Ortho && p.ortho_extent > 0)
+        zoom = height / p.ortho_extent;
+    c.set_external_view(position, position + distance * forward, vector(q.rotate({0, 1, 0})), zoom);
     m_canvas.update_openaxis_projection();
     m_last_view = c.get_view_matrix();
     m_last_zoom = c.get_zoom();
