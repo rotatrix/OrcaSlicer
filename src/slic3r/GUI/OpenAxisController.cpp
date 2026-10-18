@@ -10,6 +10,8 @@
 #include <sstream>
 #include <cmath>
 #include <limits>
+#include <boost/log/trivial.hpp>
+#include <wx/dialog.h>
 
 namespace Slic3r::GUI {
 using openaxis::Value;
@@ -29,6 +31,17 @@ openaxis::OpenAxisClientOptions options(openaxis::Scheduler *scheduler) {
     o.scheduler = scheduler;
     o.target = {{"pid", openaxis::current_process_id()}};
     return o;
+}
+// Application activation does not imply viewport interaction during a dialog.
+bool modal_dialog_open() {
+#ifdef __APPLE__
+    if (wxDialog::OSXHasModalDialogsOpen())
+        return true;
+#endif
+    for (auto node = wxTopLevelWindows.GetFirst(); node; node = node->GetNext())
+        if (auto *dialog = dynamic_cast<wxDialog *>(node->GetData()); dialog && dialog->IsShown() && dialog->IsModal())
+            return true;
+    return false;
 }
 } // namespace
 OpenAxisController::OpenAxisController(GLCanvas3D &canvas, Camera &camera,
@@ -88,7 +101,11 @@ void OpenAxisController::schedule_diagnostic_expiry() {
 void OpenAxisController::deactivate() {
     m_session.cancel("viewport_inactive");
     m_focused = false;
-    m_connection.refresh_metadata();
+    try {
+        m_connection.refresh_metadata();
+    } catch (const std::exception &e) {
+        BOOST_LOG_TRIVIAL(warning) << "OpenAxis metadata refresh: " << e.what();
+    }
     m_connection.stop();
     m_collector.clear();
     m_context.clear();
@@ -105,7 +122,7 @@ void OpenAxisController::refresh(bool focused, int x, int y, int width, int heig
     m_last_zoom = m_camera.get_zoom();
     m_last_projection = m_camera.get_type();
     const bool available = viewport_available();
-    focused = focused && available;
+    focused = focused && available && !modal_dialog_open();
     const std::string context = available ? context_key() : "";
     if (context != m_context || (!available && m_session.active())) {
         m_session.cancel("viewport_changed");
@@ -123,7 +140,12 @@ void OpenAxisController::refresh(bool focused, int x, int y, int width, int heig
         m_session.cancel("focus_lost");
     if (m_focused != focused) {
         m_focused = focused;
-        m_connection.refresh_metadata();
+        try {
+            m_connection.refresh_metadata();
+        } catch (const std::exception &e) {
+            // Keep dispatching so the connection can process loss and reconnect.
+            BOOST_LOG_TRIVIAL(warning) << "OpenAxis metadata refresh: " << e.what();
+        }
     }
     if (native_changed && m_focused && !m_writing_camera)
         m_session.native_camera_changed();
