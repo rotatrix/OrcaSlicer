@@ -1219,9 +1219,7 @@ GLCanvas3D::GLCanvas3D(wxGLCanvas* canvas, Bed3D &bed)
 GLCanvas3D::~GLCanvas3D()
 {
 #ifdef SLIC3R_OPENAXIS
-    if (m_openaxis_scheduler) m_openaxis_scheduler->before_dispatch = {};
-    m_openaxis.reset();
-    m_openaxis_scheduler.reset();
+    if (auto *controller = OpenAxisController::instance()) controller->canvas_destroyed(*this);
 #endif
     if (_set_current()) {
         if (m_fxaa_texture_id != 0) {
@@ -1326,22 +1324,7 @@ std::optional<Vec3d> GLCanvas3D::openaxis_gcode_hit(const Vec2d& pixel)
     return out;
 }
 
-void GLCanvas3D::refresh_openaxis()
-{
-    if (!m_openaxis || !m_canvas) return;
-    const Size size = get_canvas_size();
-    const wxPoint cursor = m_canvas->ScreenToClient(wxGetMousePosition());
-    // wx coordinates are logical on Retina; the camera viewport is physical.
-#if ENABLE_RETINA_GL
-    const double scale = size.get_scale_factor();
-#else
-    const double scale = 1.0;
-#endif
-    const bool focused = m_canvas->IsShownOnScreen() && m_canvas->IsEnabled() &&
-        wxTheApp->IsActive() && wxGetApp().plater()->get_current_canvas3D() == this;
-    m_openaxis->refresh(focused, int(cursor.x * scale), int(cursor.y * scale),
-                       size.get_width(), size.get_height(), scale);
-}
+
 #endif
 
 void GLCanvas3D::post_event(wxEvent &&event)
@@ -2119,15 +2102,7 @@ void GLCanvas3D::render(bool only_init)
     wxGetApp().imgui()->new_frame();
 
 #ifdef SLIC3R_OPENAXIS
-    if (!m_openaxis) {
-        m_openaxis_scheduler = std::make_shared<OpenAxisScheduler>();
-        m_openaxis = std::make_unique<OpenAxisController>(*this, camera, m_openaxis_scheduler, [this] {
-            set_as_dirty();
-            if (m_canvas) m_canvas->Refresh(false);
-        });
-        m_openaxis_scheduler->before_dispatch = [this] { refresh_openaxis(); };
-    }
-    refresh_openaxis();
+    if (auto *controller = OpenAxisController::instance()) controller->poll();
 #endif
 
     if (m_picking_enabled) {
@@ -2208,7 +2183,7 @@ void GLCanvas3D::render(bool only_init)
     }
 
 #ifdef SLIC3R_OPENAXIS
-    m_openaxis->render_indicator();
+    if (auto *controller = OpenAxisController::instance()) controller->render_indicator(*this);
 #endif
     _render_sequential_clearance();
 #if ENABLE_RENDER_SELECTION_CENTER
@@ -2319,7 +2294,7 @@ void GLCanvas3D::render(bool only_init)
 
     wxGetApp().plater()->get_mouse3d_controller().render_settings_dialog(*this);
 #ifdef SLIC3R_OPENAXIS
-    m_openaxis->render_diagnostics(m_openaxis_diagnostics);
+    if (auto *controller = OpenAxisController::instance()) controller->render_diagnostics(*this);
 #endif
 
     if (m_canvas_type != ECanvasType::CanvasAssembleView) {

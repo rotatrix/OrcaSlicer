@@ -1,4 +1,7 @@
 #include "Plater.hpp"
+#ifdef SLIC3R_OPENAXIS
+#include "OpenAxisController.hpp"
+#endif
 #include "libslic3r/Config.hpp"
 #include "libslic3r_version.h"
 
@@ -4364,6 +4367,9 @@ struct Plater::priv
     } sidebar_layout;
     Bed3D bed;
     Camera camera;
+#ifdef SLIC3R_OPENAXIS
+    std::unique_ptr<OpenAxisController> openaxis;
+#endif
     //BBS: partplate related structure
     PartPlateList partplate_list;
     //BBS: add a flag to ignore cancel event
@@ -5466,6 +5472,9 @@ Plater::priv::priv(Plater *q, MainFrame *main_frame)
 
 Plater::priv::~priv()
 {
+#ifdef SLIC3R_OPENAXIS
+    openaxis.reset();
+#endif
     if (config != nullptr)
         delete config;
     // Saves the database of visited (already shown) hints into hints.ini.
@@ -11990,6 +11999,10 @@ Plater::Plater(wxWindow *parent, MainFrame *main_frame)
     : wxPanel(parent, wxID_ANY, wxDefaultPosition, wxGetApp().get_min_size())
     , p(new priv(this, main_frame))
 {
+#ifdef SLIC3R_OPENAXIS
+    p->openaxis = std::make_unique<OpenAxisController>(p->camera, "OrcaSlicer", "orcaslicer",
+        std::vector<std::string>{"app.orcaslicer", "workspace.modeling"});
+#endif
     // Initialization performed in the private c-tor
     enable_wireframe(true);
     m_only_gcode = false;
