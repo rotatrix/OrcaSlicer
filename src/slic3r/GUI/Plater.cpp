@@ -12000,7 +12000,7 @@ Plater::Plater(wxWindow *parent, MainFrame *main_frame)
     , p(new priv(this, main_frame))
 {
 #ifdef SLIC3R_OPENAXIS
-    p->openaxis = std::make_unique<OpenAxisController>(p->camera, "OrcaSlicer", "orcaslicer",
+    p->openaxis = std::make_unique<OpenAxisController>(p->camera, "OrcaSlicer", SoftFever_VERSION, "orcaslicer",
         std::vector<std::string>{"app.orcaslicer", "workspace.modeling"});
 #endif
     // Initialization performed in the private c-tor
