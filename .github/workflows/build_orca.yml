@@ -136,7 +136,7 @@ jobs:
         if: runner.os == 'macOS' && !inputs.macos-combine-only
         run: |
           if [ -z "${{ vars.SELF_HOSTED }}" ]; then
-            brew install libtool gettext
+            brew install libtool gettext xz
             brew list
           fi
           mkdir -p ${{ github.workspace }}/deps/build/${{ inputs.arch }}
@@ -145,6 +145,8 @@ jobs:
         if: runner.os == 'macOS' && !inputs.macos-combine-only
         working-directory: ${{ github.workspace }}
         run: |
+          # Boost needs XZ headers; keep library discovery restricted to the SDK/dependency bundle.
+          export CMAKE_INCLUDE_PATH="$(brew --prefix xz)/include${CMAKE_INCLUDE_PATH:+:$CMAKE_INCLUDE_PATH}"
           ./build_release_macos.sh -s -n -x ${{ !vars.SELF_HOSTED && '-1' || '' }} -a ${{ inputs.arch }} -t 10.15
 
       - name: Verify OpenAxis macOS build
