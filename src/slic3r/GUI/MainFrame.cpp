@@ -2559,6 +2559,14 @@ static wxMenu* generate_help_menu()
 {
     wxMenu* helpMenu = new wxMenu();
 
+#ifdef SLIC3R_OPENAXIS
+    helpMenu->Append(wxID_ANY, wxString::FromUTF8("OrcaSlicer " SoftFever_VERSION " — Rotatrix " ROTATRIX_VERSION " (" GIT_COMMIT_HASH ")"))->Enable(false);
+    append_menu_item(helpMenu, wxID_ANY, _L("Download Rotatrix builds…"),
+        _L("Open the Rotatrix releases page in your browser"),
+        [](wxCommandEvent&) { wxLaunchDefaultBrowser("https://github.com/rotatrix/OrcaSlicer/releases"); });
+    helpMenu->AppendSeparator();
+#endif
+
     // shortcut key
     append_menu_item(helpMenu, wxID_ANY, _L("Keyboard Shortcuts") + sep + "&?", _L("Show the list of keyboard shortcuts"),
         [](wxCommandEvent&) { wxGetApp().keyboard_shortcuts(); });
@@ -2594,14 +2602,7 @@ static wxMenu* generate_help_menu()
     //    [](wxCommandEvent&) {
     //        //TODO
     //    });
-#ifdef SLIC3R_OPENAXIS
-    helpMenu->AppendSeparator();
-    helpMenu->Append(wxID_ANY, wxString::FromUTF8("Rotatrix " ROTATRIX_VERSION " · " GIT_COMMIT_HASH))->Enable(false);
-    append_menu_item(helpMenu, wxID_ANY, _L("Download Rotatrix builds…"),
-        _L("Open the Rotatrix releases page in your browser"),
-        [](wxCommandEvent&) { wxLaunchDefaultBrowser("https://github.com/rotatrix/OrcaSlicer/releases"); });
-    helpMenu->AppendSeparator();
-#else
+#ifndef SLIC3R_OPENAXIS
     append_menu_item(helpMenu, wxID_ANY, _L("Check for Updates"), _L("Check for Updates"),
         [](wxCommandEvent&) { wxGetApp().check_new_version_sf(true, 1); });
 #endif
@@ -2646,15 +2647,24 @@ static void add_common_publish_menu_items(wxMenu* publish_menu, MainFrame* mainF
 #endif
 }
 
-static void add_common_view_menu_items(wxMenu* view_menu, MainFrame* mainFrame, std::function<bool(void)> can_change_view)
+static void add_openaxis_view_menu_items(wxMenu* menu, MainFrame* main_frame)
 {
 #ifdef SLIC3R_OPENAXIS
-    append_menu_item(view_menu, wxID_ANY, "OpenAxis Diagnostics", "Show OpenAxis navigation diagnostics",
+    menu->AppendSeparator();
+    append_menu_check_item(menu, wxID_ANY, "OpenAxis Diagnostics", "Show OpenAxis navigation diagnostics",
         [](wxCommandEvent&) {
-            if (auto *canvas = wxGetApp().plater()->get_current_canvas3D()) canvas->toggle_openaxis_diagnostics();
-        });
-    view_menu->AppendSeparator();
+            if (auto *controller = OpenAxisController::instance()) controller->toggle_diagnostics();
+        }, main_frame,
+        []() { return OpenAxisController::instance() != nullptr; },
+        []() {
+            auto *controller = OpenAxisController::instance();
+            return controller && controller->diagnostics_visible();
+        }, main_frame);
 #endif
+}
+
+static void add_common_view_menu_items(wxMenu* view_menu, MainFrame* mainFrame, std::function<bool(void)> can_change_view)
+{
     // The camera control accelerators are captured by GLCanvas3D::on_char().
     append_menu_item(view_menu, wxID_ANY, _L("Default View") + "\t" + ctrl + "0", _L("Default View"), [mainFrame](wxCommandEvent&) {
         mainFrame->select_view("plate");
@@ -3438,8 +3448,10 @@ void MainFrame::init_menubar_as_editor()
     m_menubar->Append(fileMenu, wxString::Format("&%s", _L("File")));
     if (editMenu)
         m_menubar->Append(editMenu, wxString::Format("&%s", _L("Edit")));
-    if (viewMenu)
+    if (viewMenu) {
+        add_openaxis_view_menu_items(viewMenu, this);
         m_menubar->Append(viewMenu, wxString::Format("&%s", _L("View")));
+    }
     /*if (publishMenu)
         m_menubar->Append(publishMenu, wxString::Format("&%s", _L("3D Models")));*/
 
@@ -3647,7 +3659,10 @@ void MainFrame::init_menubar_as_gcodeviewer()
 
     m_menubar = new wxMenuBar();
     m_menubar->Append(fileMenu, _L("&File"));
-    if (viewMenu != nullptr) m_menubar->Append(viewMenu, _L("&View"));
+    if (viewMenu != nullptr) {
+        add_openaxis_view_menu_items(viewMenu, this);
+        m_menubar->Append(viewMenu, _L("&View"));
+    }
     // Add additional menus from C++
     wxGetApp().add_config_menu(m_menubar);
     m_menubar->Append(helpMenu, _L("&Help"));
