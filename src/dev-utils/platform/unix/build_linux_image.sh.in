@@ -159,6 +159,7 @@ echo -n "[9/9] Generating Linux app..."
     fi
 
     cp -Rf ../resources "$APPDIR/resources"
+    cp -f "${REPO_ROOT}/LICENSE.txt" "$APPDIR/LICENSE.txt"
 
     ORIGINAL_BINARY_LOCATION=""
     if [ -f "src/${CONFIG}/@SLIC3R_APP_CMD@" ]; then
