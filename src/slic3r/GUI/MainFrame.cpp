@@ -3290,6 +3290,10 @@ void MainFrame::init_menubar_as_editor()
         "", nullptr, []() { return true; }, this, 1);
     //parent_menu->Insert(1, preference_item);
 #endif
+    // Complete View before either the native menu bar or custom top bar consumes it.
+    if (viewMenu)
+        add_openaxis_view_menu_items(viewMenu, this);
+
     // Help menu
     auto helpMenu = generate_help_menu();
 
@@ -3448,10 +3452,8 @@ void MainFrame::init_menubar_as_editor()
     m_menubar->Append(fileMenu, wxString::Format("&%s", _L("File")));
     if (editMenu)
         m_menubar->Append(editMenu, wxString::Format("&%s", _L("Edit")));
-    if (viewMenu) {
-        add_openaxis_view_menu_items(viewMenu, this);
+    if (viewMenu)
         m_menubar->Append(viewMenu, wxString::Format("&%s", _L("View")));
-    }
     /*if (publishMenu)
         m_menubar->Append(publishMenu, wxString::Format("&%s", _L("3D Models")));*/
 
