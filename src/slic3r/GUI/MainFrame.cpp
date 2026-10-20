@@ -2594,19 +2594,16 @@ static wxMenu* generate_help_menu()
     //    [](wxCommandEvent&) {
     //        //TODO
     //    });
-    // Check New Version
-    append_menu_item(helpMenu, wxID_ANY, _L("Check for Updates"), _L("Check for Updates"),
-        [](wxCommandEvent&) {
-            wxGetApp().check_new_version_sf(true, 1);
-        }, "", nullptr, []() {
-            return true;
-        });
-
 #ifdef SLIC3R_OPENAXIS
-    append_menu_item(helpMenu, wxID_ANY, "OpenAxis Diagnostics", "Show OpenAxis navigation diagnostics",
-        [](wxCommandEvent&) {
-            if (auto *canvas = wxGetApp().plater()->get_current_canvas3D()) canvas->toggle_openaxis_diagnostics();
-        });
+    helpMenu->AppendSeparator();
+    helpMenu->Append(wxID_ANY, wxString::FromUTF8("Rotatrix " ROTATRIX_VERSION " · " GIT_COMMIT_HASH))->Enable(false);
+    append_menu_item(helpMenu, wxID_ANY, _L("Download Rotatrix builds…"),
+        _L("Open the Rotatrix releases page in your browser"),
+        [](wxCommandEvent&) { wxLaunchDefaultBrowser("https://github.com/rotatrix/OrcaSlicer/releases"); });
+    helpMenu->AppendSeparator();
+#else
+    append_menu_item(helpMenu, wxID_ANY, _L("Check for Updates"), _L("Check for Updates"),
+        [](wxCommandEvent&) { wxGetApp().check_new_version_sf(true, 1); });
 #endif
     // About
 #ifndef __APPLE__
@@ -2651,6 +2648,13 @@ static void add_common_publish_menu_items(wxMenu* publish_menu, MainFrame* mainF
 
 static void add_common_view_menu_items(wxMenu* view_menu, MainFrame* mainFrame, std::function<bool(void)> can_change_view)
 {
+#ifdef SLIC3R_OPENAXIS
+    append_menu_item(view_menu, wxID_ANY, "OpenAxis Diagnostics", "Show OpenAxis navigation diagnostics",
+        [](wxCommandEvent&) {
+            if (auto *canvas = wxGetApp().plater()->get_current_canvas3D()) canvas->toggle_openaxis_diagnostics();
+        });
+    view_menu->AppendSeparator();
+#endif
     // The camera control accelerators are captured by GLCanvas3D::on_char().
     append_menu_item(view_menu, wxID_ANY, _L("Default View") + "\t" + ctrl + "0", _L("Default View"), [mainFrame](wxCommandEvent&) {
         mainFrame->select_view("plate");

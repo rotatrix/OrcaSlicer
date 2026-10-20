@@ -5615,6 +5615,10 @@ void maybe_attach_updater_signature(Http& http, const std::string& canonical_que
 
 void GUI_App::check_new_version_sf(bool show_tips, int by_user)
 {
+#ifdef SLIC3R_OPENAXIS
+    // Rotatrix application updates are manual; ignore inherited updater preferences.
+    return;
+#endif
     AppConfig* app_config = wxGetApp().app_config;
     bool       check_stable_only = app_config->get_bool("check_stable_update_only");
     auto version_check_url = app_config->version_check_url();
@@ -5878,6 +5882,10 @@ void GUI_App::request_new_version(int by_user)
 
 void GUI_App::enter_force_upgrade()
 {
+#ifdef SLIC3R_OPENAXIS
+    // Rotatrix application updates are manual; ignore inherited updater preferences.
+    return;
+#endif
     wxCommandEvent *evt = new wxCommandEvent(EVT_ENTER_FORCE_UPGRADE);
     GUI::wxGetApp().QueueEvent(evt);
 }
